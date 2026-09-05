@@ -226,6 +226,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "kafka-metadata"
+version = "0.1.0"
+dependencies = [
+ "kafka-common",
+ "kafka-errors",
+ "kafka-protocol",
+ "kafka-record",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "kafka-net"
 version = "0.1.0"
 dependencies = [

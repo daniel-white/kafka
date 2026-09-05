@@ -1,0 +1,19 @@
+[package]
+name = "kafka-metadata"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kafka-common = { path = "../kafka-common" }
+kafka-errors = { path = "../kafka-errors" }
+kafka-protocol = { path = "../kafka-protocol" }
+kafka-record = { path = "../kafka-record" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lib]
+name = "kafka_metadata"
+path = "src/lib.rs"

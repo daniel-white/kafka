@@ -5,8 +5,10 @@
 //! MIGRATION_SOURCE: (new) — workspace crate root
 
 pub mod api_error;
+pub mod broker_end_point;
 pub mod broker_registration;
 pub mod broker_state;
+pub mod config;
 pub mod directory_id;
 pub mod feature_versions;
 pub mod offset_and_epoch;
@@ -18,11 +20,13 @@ pub mod stop_partition;
 pub mod topic_id_partition;
 
 pub use api_error::ApiError;
+pub use broker_end_point::BrokerEndPoint;
 pub use broker_registration::{
     BrokerRegistrationFencingChange, BrokerRegistrationInControlledShutdownChange,
     BrokerRegistrationReply,
 };
 pub use broker_state::BrokerState;
+pub use config::{ConfigSynonym, ConfigType};
 pub use directory_id::DirectoryId;
 pub use feature_versions::{
     EligibleLeaderReplicasVersion, GroupVersion, KRaftVersion, ShareVersion, StreamsVersion,

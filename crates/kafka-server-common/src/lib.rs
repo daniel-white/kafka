@@ -4,8 +4,10 @@
 //!
 //! MIGRATION_SOURCE: (new) — workspace crate root
 
+pub mod api_error;
 pub mod offset_and_epoch;
 pub mod topic_id_partition;
 
+pub use api_error::ApiError;
 pub use offset_and_epoch::OffsetAndEpoch;
 pub use topic_id_partition::TopicIdPartition;

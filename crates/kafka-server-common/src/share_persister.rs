@@ -157,6 +157,43 @@ pub struct TopicData<P> {
     partitions: Vec<P>,
 }
 
+/// Group topic partition data: a group ID and its topic partition data.
+///
+/// Generic over `P` (the partition info type), mirroring Java's
+/// `GroupTopicPartitionData<P>`.
+///
+/// Fields are private; access via `getset` generated accessors.
+///
+/// MIGRATION_SOURCE: server-common/.../share/persister/GroupTopicPartitionData.java
+#[derive(Debug, Clone, PartialEq, Eq, Getters)]
+pub struct GroupTopicPartitionData<P> {
+    #[get = "pub"]
+    group_id: String,
+    #[get = "pub"]
+    topics_data: Vec<TopicData<P>>,
+}
+
+impl<P> GroupTopicPartitionData<P> {
+    /// Create a new GroupTopicPartitionData.
+    ///
+    /// MIGRATION_SOURCE: server-common/.../share/persister/GroupTopicPartitionData.java
+    pub fn new(group_id: String, topics_data: Vec<TopicData<P>>) -> Self {
+        GroupTopicPartitionData {
+            group_id,
+            topics_data,
+        }
+    }
+}
+
+impl<P> Default for GroupTopicPartitionData<P> {
+    fn default() -> Self {
+        GroupTopicPartitionData {
+            group_id: String::new(),
+            topics_data: Vec::new(),
+        }
+    }
+}
+
 impl<P> TopicData<P> {
     /// Create a new TopicData.
     ///

@@ -31,7 +31,7 @@ pub use feature_versions::{
 pub use offset_and_epoch::OffsetAndEpoch;
 pub use producer_ids_block::{ProducerIdsBlock, PRODUCER_ID_BLOCK_SIZE};
 pub use replicas::Replicas;
-pub use share_persister::{PartitionData, PartitionDataBuilder, TopicData};
+pub use share_persister::{GroupTopicPartitionData, PartitionData, PartitionDataBuilder, TopicData};
 pub use state_batch::PersisterStateBatch;
 pub use stop_partition::StopPartition;
 pub use topic_id_partition::TopicIdPartition;

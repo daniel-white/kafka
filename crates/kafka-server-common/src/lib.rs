@@ -9,6 +9,7 @@ pub mod directory_id;
 pub mod feature_versions;
 pub mod offset_and_epoch;
 pub mod producer_ids_block;
+pub mod state_batch;
 pub mod stop_partition;
 pub mod topic_id_partition;
 
@@ -19,5 +20,6 @@ pub use feature_versions::{
 };
 pub use offset_and_epoch::OffsetAndEpoch;
 pub use producer_ids_block::{ProducerIdsBlock, PRODUCER_ID_BLOCK_SIZE};
+pub use state_batch::PersisterStateBatch;
 pub use stop_partition::StopPartition;
 pub use topic_id_partition::TopicIdPartition;

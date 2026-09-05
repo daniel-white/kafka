@@ -1,6 +1,6 @@
 //! Kafka broker server entry point.
 //!
-//! Minimal walking skeleton: starts, binds a listener, reports RUNNING state.
+//! Provides KafkaServer lifecycle management and request routing.
 //!
 //! MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
 
@@ -10,9 +10,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub mod request_handler;
+pub mod server_state;
 pub mod socket_server;
 
 pub use request_handler::dispatch as dispatch_request;
+pub use server_state::{ServerPartition, ServerState, TopicMetadata};
 pub use socket_server::{KafkaConnection, SocketServer};
 
 /// Server lifecycle state, managed atomically.
@@ -24,6 +26,8 @@ pub use socket_server::{KafkaConnection, SocketServer};
 pub struct KafkaServer {
     /// Process lifecycle status.
     status: Arc<AtomicU8>,
+    /// Broker-level state (topics, partitions).
+    state: Arc<ServerState>,
 }
 
 impl KafkaServer {
@@ -33,6 +37,7 @@ impl KafkaServer {
     pub fn new() -> Self {
         KafkaServer {
             status: Arc::new(AtomicU8::new(ProcessStatus::Shutdown as u8)),
+            state: Arc::new(ServerState::default()),
         }
     }
 
@@ -42,7 +47,6 @@ impl KafkaServer {
     pub fn startup(&self) {
         self.status
             .store(ProcessStatus::Starting as u8, Ordering::SeqCst);
-        // Simulate async initialization
         std::thread::sleep(Duration::from_millis(100));
         self.status
             .store(ProcessStatus::Started as u8, Ordering::SeqCst);
@@ -76,6 +80,13 @@ impl KafkaServer {
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
     pub fn is_running(&self) -> bool {
         self.status() == ProcessStatus::Started
+    }
+
+    /// Get a reference to the server's broker-level state.
+    ///
+    /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
+    pub fn state(&self) -> &Arc<ServerState> {
+        &self.state
     }
 }
 

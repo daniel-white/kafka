@@ -4,73 +4,69 @@
 //!
 //! MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
 
+use crate::server_state::ServerState;
+use kafka_protocol::byte_utils;
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::response_header::ResponseHeader;
 use kafka_protocol::ApiKey;
 
 /// Dispatch a parsed request to the appropriate handler.
 ///
-/// Currently handles: ApiVersions (api_key=15) with a full response listing
-/// all known API keys and their version ranges.
+/// Returns the serialized response bytes (frame: [4-byte size][response_header][body]).
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
-pub fn dispatch(request: &KafkaRequest) -> Vec<u8> {
+pub fn dispatch(
+    request: &KafkaRequest,
+    state: &ServerState,
+) -> Vec<u8> {
     let api_key = ApiKey::from_id(request.header.api_key);
-    let header = &request.header;
+    let version = request.header.api_version;
 
     match api_key {
-        ApiKey::ApiVersions | ApiKey::Unknown(15) => {
-            build_api_versions_response(header.correlation_id)
-        }
-        _ => {
-            // Echo back with empty body for unimplemented APIs
-            build_empty_response(header.correlation_id)
-        }
+        ApiKey::ApiVersions => build_api_versions_response(request.header.correlation_id, version),
+        ApiKey::DescribeTopics => build_describe_topics_response(request.header.correlation_id, state, version),
+        _ => build_empty_response(request.header.correlation_id),
     }
 }
 
-/// Build a complete ApiVersions v0 response.
+/// Build an ApiVersions response.
 ///
-/// Wire format (v0):
-///   correlation_id  int32  (from header)
-///   throttle_time_ms int32 (0)
-///   error_code      int16 (0 = no error)
-///   api_versions    array of (api_key: int16, min_version: int16, max_version: int16)
+/// v0/v1/v2 (non-flexible): throttle_time_ms, api_versions ARRAY, (error_code for v0)
+/// v3+ (flexible): throttle_time_ms, api_versions COMPACT_ARRAY, supported_usable_versions STRING, tagged_fields
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-fn build_api_versions_response(correlation_id: i32) -> Vec<u8> {
-    // Known API keys and their version ranges
-    let api_entries: &[(i16, i16)] = &[
-        (0, 13),    // Produce
-        (1, 16),    // Fetch
-        (2, 5),     // ListOffsets
-        (3, 5),     // Heartbeat
-        (4, 3),     // Leave
-        (5, 5),     // JoinGroup
-        (6, 3),     // ElectLeaders
-        (7, 2),     // AlterConfigs
-        (8, 2),     // DescribeConfigs
-        (9, 1),     // UpdateFeatures
-        (11, 2),    // ListGroups
-        (12, 2),    // DeleteGroups
-        (13, 3),    // AddPartitionsToTxn
-        (14, 2),    // RemoveFromTxn
-        (15, 5),    // ApiVersions
-        (16, 8),    // CreateTopics
-        (17, 8),    // DeleteTopics
-        (18, 2),    // DescribeTopics
-        (19, 2),    // AlterReplicaLogDirs
-        (20, 2),    // DescribeAcls
-        (21, 2),    // DescribeUsers
-        (22, 2),    // AlterUserScramCredentials
-        (23, 2),    // DeleteRecords
-        (24, 1),    // AddQuotas
-        (25, 1),    // RemoveQuotas
-        (26, 1),    // AlterPartition
-        (27, 1),    // UnassignReplica
-        (28, 1),    // AlterAcls
-        (29, 1),    // DescribeQuotas
+fn build_api_versions_response(correlation_id: i32, version: i16) -> Vec<u8> {
+    let api_entries: &[(i16, i16, i16)] = &[
+        (0, 0, 13),    // Produce
+        (1, 0, 16),    // Fetch
+        (2, 0, 5),     // ListOffsets
+        (3, 0, 5),     // Heartbeat
+        (4, 0, 3),     // Leave
+        (5, 0, 5),     // JoinGroup
+        (6, 0, 3),     // ElectLeaders
+        (7, 0, 2),     // AlterConfigs
+        (8, 0, 2),     // DescribeConfigs
+        (9, 0, 1),     // UpdateFeatures
+        (11, 0, 2),    // ListGroups
+        (12, 0, 2),    // DeleteGroups
+        (13, 0, 3),    // AddPartitionsToTxn
+        (14, 0, 2),    // RemoveFromTxn
+        (15, 0, 5),    // ApiVersions
+        (16, 0, 8),    // CreateTopics
+        (17, 0, 8),    // DeleteTopics
+        (18, 0, 2),    // DescribeTopics
+        (19, 0, 2),    // AlterReplicaLogDirs
+        (20, 0, 2),    // DescribeAcls
+        (21, 0, 2),    // DescribeUsers
+        (22, 0, 2),    // AlterUserScramCredentials
+        (23, 0, 2),    // DeleteRecords
+        (24, 0, 1),    // AddQuotas
+        (25, 0, 1),    // RemoveQuotas
+        (26, 0, 1),    // AlterPartition
+        (27, 0, 1),    // UnassignReplica
+        (28, 0, 1),    // AlterAcls
+        (29, 0, 1),    // DescribeQuotas
     ];
 
     let mut body = Vec::new();
@@ -78,21 +74,112 @@ fn build_api_versions_response(correlation_id: i32) -> Vec<u8> {
     // throttle_time_ms = 0
     body.extend_from_slice(&0i32.to_be_bytes());
 
-    // error_code = 0 (no error)
-    body.extend_from_slice(&0i16.to_be_bytes());
-
-    // api_versions array: 4-byte count (not compact array, so i32)
-    body.extend_from_slice(&(api_entries.len() as i32).to_be_bytes());
-    for (api_key, max_version) in api_entries {
-        body.extend_from_slice(&api_key.to_be_bytes());
-        body.extend_from_slice(&0i16.to_be_bytes()); // min_version
-        body.extend_from_slice(&max_version.to_be_bytes());
+    // error_code = 0 (only for v0, non-flexible)
+    if version < 3 {
+        body.extend_from_slice(&0i16.to_be_bytes());
     }
 
-    // Build full frame: [4-byte body_size][response_header][body]
+    if version >= 3 {
+        // v3+ flexible: compact array
+        byte_utils::write_unsigned_varint((api_entries.len() + 1) as u32, &mut body).unwrap();
+        for (api_key, min_version, max_version) in api_entries {
+            body.extend_from_slice(&api_key.to_be_bytes());
+            body.extend_from_slice(&min_version.to_be_bytes());
+            body.extend_from_slice(&max_version.to_be_bytes());
+            // tagged_fields per entry: 0 = no tagged fields
+            byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+        }
+        // supported_usable_versions: STRING (2-byte length prefix + UTF-8)
+        let usable_versions = "0..29";
+        body.extend_from_slice(&(usable_versions.len() as i16).to_be_bytes());
+        body.extend_from_slice(usable_versions.as_bytes());
+        // tagged_fields
+        byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+    } else {
+        // v0/v1/v2 non-flexible: regular array (4-byte count)
+        body.extend_from_slice(&(api_entries.len() as i32).to_be_bytes());
+        for (api_key, min_version, max_version) in api_entries {
+            body.extend_from_slice(&api_key.to_be_bytes());
+            body.extend_from_slice(&min_version.to_be_bytes());
+            body.extend_from_slice(&max_version.to_be_bytes());
+        }
+    }
+
     let header = ResponseHeader::new(correlation_id);
-    let response_size = (header.size() + body.len()) as i32;
-    let mut frame = Vec::with_capacity(4 + header.size() + body.len());
+    let header_size = header.size();
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    header.write(&mut frame);
+    frame.extend_from_slice(&body);
+    frame
+}
+
+/// Build a DescribeTopics v3 response.
+///
+/// Wire format (v3, flexible):
+///   throttle_time_ms  int32
+///   topics            compact_array (empty = 1 varint byte)
+///   tagged_fields     tagged_fields
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
+fn build_describe_topics_response(correlation_id: i32, state: &ServerState, _version: i16) -> Vec<u8> {
+    let mut body = Vec::new();
+
+    // throttle_time_ms = 0
+    body.extend_from_slice(&0i32.to_be_bytes());
+
+    // topics compact array
+    if state.topics.is_empty() {
+        // Empty array: count = 1 (0 entries + 1)
+        byte_utils::write_unsigned_varint(1, &mut body).unwrap();
+    } else {
+        byte_utils::write_unsigned_varint((state.topics.len() + 1) as u32, &mut body).unwrap();
+        for topic in state.topics.values() {
+            // error_code = 0 (no error)
+            body.extend_from_slice(&0i16.to_be_bytes());
+            // topic_name: compact string
+            byte_utils::write_unsigned_varint((topic.name.len() + 1) as u32, &mut body).unwrap();
+            body.extend_from_slice(topic.name.as_bytes());
+            // topic_id: UUID (16 bytes: MSB + LSB in big-endian)
+            let msb = topic.uuid.get_most_significant_bits().to_be_bytes();
+            let lsb = topic.uuid.get_least_significant_bits().to_be_bytes();
+            body.extend_from_slice(&msb);
+            body.extend_from_slice(&lsb);
+            // is_internal: bool (false = 0)
+            body.push(0);
+            // topic_authorized_operations: int32 (0 = no operations)
+            body.extend_from_slice(&0i32.to_be_bytes());
+            // partitions compact array
+            if topic.partitions.is_empty() {
+                byte_utils::write_unsigned_varint(1, &mut body).unwrap();
+            } else {
+                byte_utils::write_unsigned_varint((topic.partitions.len() + 1) as u32, &mut body).unwrap();
+                for partition in &topic.partitions {
+                    body.extend_from_slice(&0i16.to_be_bytes());  // error_code
+                    body.extend_from_slice(&partition.partition_index.to_be_bytes());
+                    body.extend_from_slice(&(-1i32).to_be_bytes());  // leader_id
+                    body.extend_from_slice(&0i32.to_be_bytes());  // leader_epoch
+                    byte_utils::write_unsigned_varint(1, &mut body).unwrap();  // replica_nodes
+                    byte_utils::write_unsigned_varint(1, &mut body).unwrap();  // isr_nodes
+                    byte_utils::write_unsigned_varint(1, &mut body).unwrap();  // adding_replicas
+                    byte_utils::write_unsigned_varint(1, &mut body).unwrap();  // removing_replicas
+                    byte_utils::write_unsigned_varint(0, &mut body).unwrap();  // tagged_fields
+                }
+            }
+            // topic_state tagged_fields
+            byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+        }
+    }
+
+    // tagged_fields at end
+    byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+
+    let header = ResponseHeader::new(correlation_id);
+    let header_size = header.size();
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
     frame.extend_from_slice(&response_size.to_be_bytes());
     header.write(&mut frame);
     frame.extend_from_slice(&body);
@@ -112,3 +199,5 @@ fn build_empty_response(correlation_id: i32) -> Vec<u8> {
     header.write(&mut frame);
     frame
 }
+
+// ServerState, TopicMetadata, ServerPartition are defined in server_state.rs

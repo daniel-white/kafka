@@ -121,12 +121,14 @@ impl SocketServer {
     ///
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/SocketServer.scala
     pub async fn accept_loop(&self, listener: tokio::net::TcpListener) {
+        let state = self.server.state().clone();
         loop {
             match listener.accept().await {
                 Ok((mut socket, peer_addr)) => {
                     println!("Accepted connection from {}", peer_addr);
+                    let state = state.clone();
                     tokio::spawn(async move {
-                        handle_connection(&mut socket, peer_addr).await;
+                        handle_connection(&mut socket, peer_addr, &state).await;
                     });
                 }
                 Err(e) => eprintln!("Accept error: {}", e),
@@ -136,10 +138,7 @@ impl SocketServer {
 }
 
 /// Handle a single TCP connection: read bytes, parse Kafka request framing,
-/// and send a minimal response back.
-///
-/// Currently responds to any request with an empty-body response containing
-/// only the ResponseHeader (correlation_id).
+/// and send a response back.
 ///
 /// Mirrors Java's SocketServer.connection handling.
 ///
@@ -147,6 +146,7 @@ impl SocketServer {
 pub async fn handle_connection(
     socket: &mut tokio::net::TcpStream,
     peer_addr: std::net::SocketAddr,
+    state: &crate::ServerState,
 ) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -169,8 +169,10 @@ pub async fn handle_connection(
                             request.header.api_version,
                             request.header.correlation_id
                         );
-                        let response = crate::dispatch_request(&request);
+                        let response = crate::dispatch_request(&request, state);
                         let _ = socket.write_all(&response).await;
+                        // Reset connection for next request on this stream
+                        conn = KafkaConnection::new();
                     } else if let Some(Err(e)) = conn.try_parse_request() {
                         eprintln!("Parse error: {}", e);
                     }

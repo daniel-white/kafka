@@ -71,11 +71,17 @@ async fn test_e2e_api_versions_request() {
     let cid = parse_correlation_id(response).expect("Failed to parse response");
     assert_eq!(cid, 42, "Response correlation_id should match request");
 
-    // Verify response contains error_code = 0 (no error)
-    // Response layout: [size:4][correlation_id:4][throttle_time:4][error_code:2][...]
-    assert!(response.len() >= 14, "Response too short: {} bytes", response.len());
-    let error_code = i16::from_be_bytes(response[12..14].try_into().unwrap());
-    assert_eq!(error_code, 0, "Expected NO_ERROR (0), got {}", error_code);
+    // Verify ApiVersions response body (v3):
+    //   [correlation_id:4][throttle_time_ms:4][compact_array_count:1(varint)][...entries...]
+    assert!(response.len() >= 12, "Response too short: {} bytes", response.len());
+
+    // throttle_time_ms should be 0
+    let throttle_time = i32::from_be_bytes(response[8..12].try_into().unwrap());
+    assert_eq!(throttle_time, 0, "Expected throttle_time_ms=0, got {}", throttle_time);
+
+    // The compact array count for api_versions should be >= 1
+    let array_count_byte = response[12];
+    assert!(array_count_byte >= 1, "Expected non-empty api_versions array");
 
     server.shutdown();
 }

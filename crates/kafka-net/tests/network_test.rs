@@ -143,7 +143,7 @@ fn test_byte_buffer_send_empty() {
 
 #[test]
 fn test_request_header_write_read() {
-    let header = RequestHeader::new(1, 12, 42, "my-client");
+    let header = RequestHeader::new(1, 1, 42, "my-client"); // v1 = non-flexible
     let size = header.size();
 
     let mut buf = Vec::new();
@@ -152,7 +152,7 @@ fn test_request_header_write_read() {
 
     // Verify wire format: apiKey (2) + apiVersion (2) + correlationId (4) + clientIdLen (2) + clientId
     assert_eq!(&buf[0..2], &1i16.to_be_bytes());    // apiKey
-    assert_eq!(&buf[2..4], &12i16.to_be_bytes());   // apiVersion
+    assert_eq!(&buf[2..4], &1i16.to_be_bytes());   // apiVersion
     assert_eq!(&buf[4..8], &42i32.to_be_bytes());   // correlationId
     assert_eq!(&buf[8..10], &9i16.to_be_bytes());   // clientId length
     assert_eq!(&buf[10..19], b"my-client");
@@ -301,6 +301,75 @@ fn test_kafka_response_too_short() {
     let data = [0u8; 5]; // less than 4+4=8 minimum
     let result = KafkaResponse::deserialize(&data);
     assert!(result.is_err());
+}
+
+#[test]
+fn test_request_header_flexible_v2() {
+    // v2+ header uses flexible format: compact_string for client_id + tagged_fields
+    let api_key: i16 = 18; // DescribeTopics
+    let api_version: i16 = 3;
+    let correlation_id: i32 = 42;
+    let client_id = "rdkafka";
+    // Build flexible header manually
+    let mut buf = Vec::new();
+    buf.extend_from_slice(&api_key.to_be_bytes());
+    buf.extend_from_slice(&api_version.to_be_bytes());
+    buf.extend_from_slice(&correlation_id.to_be_bytes());
+    // Compact string: varint(len + 1) + bytes
+    let cid_len = client_id.len() + 1;
+    let mut v = cid_len as u32;
+    while v >= 0x80 {
+        buf.push((v as u8 & 0x7F) | 0x80);
+        v >>= 7;
+    }
+    buf.push(v as u8);
+    buf.extend_from_slice(client_id.as_bytes());
+    // Tagged fields: 0 entries
+    buf.push(0);
+    // Some placeholder body data
+    buf.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+
+    let mut slice = buf.as_slice();
+    let decoded = RequestHeader::read(&mut slice).unwrap();
+    assert_eq!(decoded.api_key, 18);
+    assert_eq!(decoded.api_version, 3);
+    assert_eq!(decoded.correlation_id, 42);
+    assert_eq!(decoded.client_id, "rdkafka");
+    // Should have consumed the header and left the body
+    assert_eq!(slice.len(), 4);
+}
+
+#[test]
+fn test_request_header_flexible_empty_client() {
+    // v2+ flexible header with empty client_id
+    let mut buf = Vec::new();
+    buf.extend_from_slice(&18i16.to_be_bytes());  // api_key
+    buf.extend_from_slice(&3i16.to_be_bytes());   // api_version
+    buf.extend_from_slice(&1i32.to_be_bytes());   // correlation_id
+    // Compact string: empty = varint(1)
+    buf.push(1);
+    // Tagged fields: 0 entries
+    buf.push(0);
+
+    let mut slice = buf.as_slice();
+    let decoded = RequestHeader::read(&mut slice).unwrap();
+    assert_eq!(decoded.client_id, "");
+    assert!(slice.is_empty());
+}
+
+#[test]
+fn test_request_header_flexible_round_trip() {
+    // Round-trip: write flexible header, read it back
+    let header = RequestHeader::new(18, 3, 7, "test-client"); // v3 = flexible
+    let mut buf = Vec::new();
+    header.write(&mut buf);
+    assert_eq!(buf.len(), header.size());
+
+    let mut slice = buf.as_slice();
+    let decoded = RequestHeader::read(&mut slice).unwrap();
+    assert_eq!(decoded, header);
+    assert_eq!(decoded.client_id, "test-client");
+    assert!(slice.is_empty());
 }
 
 #[test]

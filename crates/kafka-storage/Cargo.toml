@@ -1,0 +1,14 @@
+[package]
+name = "kafka-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kafka-protocol = { path = "../kafka-protocol" }
+kafka-errors = { path = "../kafka-errors" }
+thiserror = "2"
+
+[lints.rust]
+unsafe_code = "deny"

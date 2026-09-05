@@ -48,7 +48,7 @@ impl Uuid {
     /// Constructs a 128-bit UUID from most and least significant bits.
     ///
     /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/Uuid.java
-    pub fn new(most_sig_bits: i64, least_sig_bits: i64) -> Self {
+    pub const fn new(most_sig_bits: i64, least_sig_bits: i64) -> Self {
         Uuid {
             most_significant_bits: most_sig_bits,
             least_significant_bits: least_sig_bits,

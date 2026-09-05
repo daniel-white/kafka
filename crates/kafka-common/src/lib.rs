@@ -5,6 +5,7 @@
 //! MIGRATION_SOURCE: (new) — workspace crate root
 
 pub mod client_id_and_broker;
+pub mod group_state;
 pub mod isolation_level;
 pub mod listener_name;
 pub mod node;
@@ -14,6 +15,7 @@ pub mod topic_partition;
 pub mod uuid;
 
 pub use client_id_and_broker::ClientIdAndBroker;
+pub use group_state::ConsumerGroupState;
 pub use isolation_level::IsolationLevel;
 pub use listener_name::ListenerName;
 pub use node::Node;

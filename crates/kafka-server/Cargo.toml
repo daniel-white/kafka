@@ -1,0 +1,16 @@
+[package]
+name = "kafka-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kafka-common = { path = "../kafka-common" }
+kafka-server-common = { path = "../kafka-server-common" }
+kafka-net = { path = "../kafka-net" }
+kafka-record = { path = "../kafka-record" }
+kafka-storage = { path = "../kafka-storage" }
+tokio = { version = "1.0", features = ["full"] }
+thiserror = "2"
+
+[lints.rust]
+unsafe_code = "deny"

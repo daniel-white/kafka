@@ -12,6 +12,7 @@ members = [
     "crates/kafka-raft",
     "crates/kafka-server-common",
     "crates/kafka-coordinator-common",
+    "crates/kafka-server",
 ]
 
 [workspace.package]

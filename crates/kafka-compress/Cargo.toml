@@ -1,0 +1,18 @@
+[package]
+name = "kafka-compress"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kafka-record = { path = "../kafka-record" }
+kafka-errors = { path = "../kafka-errors" }
+thiserror = "2"
+flate2 = "1"
+snap = "1"
+lz4_flex = "0.11"
+zstd = "0.13"
+
+[lints.rust]
+unsafe_code = "deny"

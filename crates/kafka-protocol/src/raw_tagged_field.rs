@@ -3,11 +3,12 @@
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/types/RawTaggedField.java
 
 use getset::Getters;
+use serde::{Deserialize, Serialize};
 
 /// A raw tagged field: a tag number and its opaque payload bytes.
 ///
 /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/types/RawTaggedField.java
-#[derive(Getters, Clone, Eq, PartialEq, Hash, Debug)]
+#[derive(Getters, Clone, Eq, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub struct RawTaggedField {
     #[get = "pub"]
     tag: i32,

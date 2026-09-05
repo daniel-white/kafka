@@ -3,7 +3,7 @@
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/Readable.java
 
 use crate::raw_tagged_field::RawTaggedField;
-use crate::uuid::Uuid;
+use kafka_common::uuid::Uuid;
 use std::io;
 use std::vec::Vec;
 

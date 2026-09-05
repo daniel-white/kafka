@@ -2,7 +2,7 @@
 //!
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/Writable.java
 
-use crate::uuid::Uuid;
+use kafka_common::uuid::Uuid;
 
 /// Trait for writing primitive types to a byte sink, mirroring Java's `Writable`.
 ///

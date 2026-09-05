@@ -10,6 +10,7 @@ pub mod byte_utils;
 pub mod errors;
 pub mod raw_tagged_field;
 pub mod readable;
+pub mod types;
 pub mod writable;
 
-pub mod uuid;
+pub use kafka_common::uuid;

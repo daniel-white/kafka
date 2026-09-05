@@ -1,7 +1,11 @@
-//! Kafka common types: Uuid and utility types.
+//! Kafka common types: Uuid, TopicPartition, and utility types.
 //!
 //! Mirrors `clients/src/main/java/org/apache/kafka/common/`.
 //!
 //! MIGRATION_SOURCE: (new) — workspace crate root
 
+pub mod topic_partition;
 pub mod uuid;
+
+pub use topic_partition::TopicPartition;
+pub use uuid::Uuid;

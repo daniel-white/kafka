@@ -5,6 +5,7 @@
 //! MIGRATION_SOURCE: (new) — workspace crate root
 
 pub mod api_error;
+pub mod directory_id;
 pub mod feature_versions;
 pub mod offset_and_epoch;
 pub mod producer_ids_block;
@@ -12,6 +13,7 @@ pub mod stop_partition;
 pub mod topic_id_partition;
 
 pub use api_error::ApiError;
+pub use directory_id::DirectoryId;
 pub use feature_versions::{
     GroupVersion, ShareVersion, TransactionVersion, TV_UNKNOWN,
 };

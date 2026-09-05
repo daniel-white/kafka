@@ -25,6 +25,9 @@ pub fn dispatch(
     match api_key {
         ApiKey::ApiVersions => build_api_versions_response(request.header.correlation_id, version),
         ApiKey::DescribeTopics => build_describe_topics_response(request.header.correlation_id, state, version),
+        ApiKey::Produce => build_produce_response(request.header.correlation_id, version),
+        ApiKey::Fetch => build_fetch_response(request.header.correlation_id, version),
+        ApiKey::ListOffsets => build_list_offsets_response(request.header.correlation_id, version),
         _ => build_empty_response(request.header.correlation_id),
     }
 }
@@ -175,6 +178,94 @@ fn build_describe_topics_response(correlation_id: i32, state: &ServerState, _ver
 
     // tagged_fields at end
     byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+
+    let header = ResponseHeader::new(correlation_id);
+    let header_size = header.size();
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    header.write(&mut frame);
+    frame.extend_from_slice(&body);
+    frame
+}
+
+/// Build a minimal Produce v0 response with an empty topic list.
+///
+/// Wire format (v0, non-flexible):
+///   responses ARRAY (count=0)
+///   throttle_time_ms (v6+ only)
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
+fn build_produce_response(correlation_id: i32, version: i16) -> Vec<u8> {
+    let mut body = Vec::new();
+
+    // responses ARRAY: 4-byte count = 0 (empty)
+    body.extend_from_slice(&0i32.to_be_bytes());
+
+    // v6+ has throttle_time_ms
+    if version >= 6 {
+        body.extend_from_slice(&0i32.to_be_bytes());
+    }
+
+    // v3+ has tagged_fields
+    if version >= 3 {
+        byte_utils::write_unsigned_varint(0, &mut body).unwrap();
+    }
+
+    let header = ResponseHeader::new(correlation_id);
+    let header_size = header.size();
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    header.write(&mut frame);
+    frame.extend_from_slice(&body);
+    frame
+}
+
+/// Build a minimal Fetch v0 response with empty topic list.
+///
+/// Wire format (v0, non-flexible):
+///   throttle_time_ms: int32
+///   responses ARRAY (count=0)
+///   error_code: int16
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/requests/FetchResponse.java
+fn build_fetch_response(correlation_id: i32, _version: i16) -> Vec<u8> {
+    let mut body = Vec::new();
+
+    // throttle_time_ms = 0
+    body.extend_from_slice(&0i32.to_be_bytes());
+
+    // responses ARRAY: 4-byte count = 0 (empty)
+    body.extend_from_slice(&0i32.to_be_bytes());
+
+    // error_code = 0 (NO_ERROR)
+    body.extend_from_slice(&0i16.to_be_bytes());
+
+    let header = ResponseHeader::new(correlation_id);
+    let header_size = header.size();
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    header.write(&mut frame);
+    frame.extend_from_slice(&body);
+    frame
+}
+
+/// Build a minimal ListOffsets v0 response with empty topic list.
+///
+/// Wire format (v0, non-flexible):
+///   responses ARRAY (count=0)
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/requests/ListOffsetsResponse.java
+fn build_list_offsets_response(correlation_id: i32, _version: i16) -> Vec<u8> {
+    let mut body = Vec::new();
+
+    // responses ARRAY: 4-byte count = 0 (empty)
+    body.extend_from_slice(&0i32.to_be_bytes());
 
     let header = ResponseHeader::new(correlation_id);
     let header_size = header.size();

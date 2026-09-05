@@ -13,7 +13,7 @@ pub struct RawTaggedField {
     #[get = "pub"]
     tag: i32,
     #[get = "pub"]
-    data: Vec<u8>,
+    data: Box<[u8]>,
 }
 
 impl RawTaggedField {
@@ -21,7 +21,7 @@ impl RawTaggedField {
     ///
     /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/types/RawTaggedField.java
     pub fn new(tag: i32, data: Vec<u8>) -> Self {
-        RawTaggedField { tag, data }
+        RawTaggedField { tag, data: data.into_boxed_slice() }
     }
 
     /// Number of payload bytes.

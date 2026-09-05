@@ -268,7 +268,7 @@ fn test_network_receive_size_after_read_header() {
 fn test_kafka_request_serialize() {
     let header = RequestHeader::new(1, 0, 1, "client");
     let body = vec![0xDE, 0xAD, 0xBE, 0xEF];
-    let req = KafkaRequest::new(header, body);
+    let req = KafkaRequest::from_vec(header, body);
 
     let serialized = req.serialize();
 

@@ -27,7 +27,7 @@ fn make_client_request(correlation_id: i32, body: Vec<u8>) -> ClientRequest {
 
 fn make_in_flight_request(correlation_id: i32, body: Vec<u8>) -> InFlightRequest {
     let client_req = make_client_request(correlation_id, body.clone());
-    let kafka_req = KafkaRequest::new(
+    let kafka_req = KafkaRequest::from_vec(
         RequestHeader::new(1, 0, correlation_id, "test-client"),
         body,
     );
@@ -41,7 +41,7 @@ fn make_in_flight_request_with_timeout(
     request_timeout_ms: i32,
 ) -> InFlightRequest {
     let header = RequestHeader::new(1, 0, correlation_id, "test-client");
-    let kafka_req = KafkaRequest::new(header.clone(), vec![]);
+    let kafka_req = KafkaRequest::from_vec(header.clone(), vec![]);
     let client_req = ClientRequest::new(
         destination,
         correlation_id,
@@ -264,7 +264,7 @@ fn test_in_flight_requests_nodes_with_timed_out() {
         true,
         100, // 100ms timeout
     );
-    let kafka_req1 = KafkaRequest::new(
+    let kafka_req1 = KafkaRequest::from_vec(
         RequestHeader::new(1, 0, 1, "test-client"),
         vec![],
     );
@@ -273,7 +273,7 @@ fn test_in_flight_requests_nodes_with_timed_out() {
 
     // Request that is not timed out
     let client_req2 = make_client_request(2, vec![]);
-    let kafka_req2 = KafkaRequest::new(
+    let kafka_req2 = KafkaRequest::from_vec(
         RequestHeader::new(1, 0, 2, "test-client"),
         vec![],
     );
@@ -311,7 +311,7 @@ fn test_in_flight_requests_per_node_isolation() {
     let req1 = make_in_flight_request(1, vec![]);
     let req1_clone = {
         let header = RequestHeader::new(1, 0, 1, "test-client");
-        let kafka_req = KafkaRequest::new(header, vec![]);
+        let kafka_req = KafkaRequest::from_vec(header, vec![]);
         let client_req = ClientRequest::new("broker-2", 1, RequestHeader::new(1, 0, 1, "test-client"), vec![], ts_ms(), true, 30000);
         InFlightRequest::new(client_req, kafka_req, ts_ms())
     };
@@ -377,5 +377,5 @@ fn test_client_request_to_kafka_request() {
 
     let kafka_req = req.to_kafka_request();
     assert_eq!(kafka_req.header.api_key, 1);
-    assert_eq!(kafka_req.body, vec![0x01, 0x02, 0x03]);
+    assert_eq!(kafka_req.body, vec![0x01, 0x02, 0x03].into_boxed_slice());
 }

@@ -15,25 +15,31 @@ use crate::request_header::RequestHeader;
 #[derive(Debug, Clone, Default)]
 pub struct KafkaRequest {
     pub header: RequestHeader,
-    pub body: Vec<u8>,
+    pub body: Box<[u8]>,
 }
 
 impl KafkaRequest {
-    pub fn new(header: RequestHeader, body: Vec<u8>) -> Self {
+    pub fn new(header: RequestHeader, body: Box<[u8]>) -> Self {
         KafkaRequest { header, body }
+    }
+
+    pub fn from_vec(header: RequestHeader, body: Vec<u8>) -> Self {
+        KafkaRequest {
+            header,
+            body: body.into_boxed_slice(),
+        }
     }
 
     pub fn size(&self) -> usize {
         SIZE_HEADER_SIZE + self.header.size() + self.body.len()
     }
 
-    pub fn serialize(&self) -> Vec<u8> {
+    pub fn serialize(&self) -> Box<[u8]> {
         let mut buf = Vec::with_capacity(self.size());
         let payload_size = self.header.size() + self.body.len();
         buf.extend_from_slice(&(payload_size as i32).to_be_bytes());
         self.header.write(&mut buf);
         buf.extend_from_slice(&self.body);
-        buf
+        buf.into_boxed_slice()
     }
 }
-

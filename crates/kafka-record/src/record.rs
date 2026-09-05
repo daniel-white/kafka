@@ -41,8 +41,8 @@ pub struct DefaultRecord {
     offset: i64,
     timestamp: i64,
     sequence: i32,
-    key: Option<Vec<u8>>,
-    value: Option<Vec<u8>>,
+    key: Option<Box<[u8]>>,
+    value: Option<Box<[u8]>>,
     headers: Vec<Header>,
 }
 
@@ -59,8 +59,8 @@ impl DefaultRecord {
         offset: i64,
         timestamp: i64,
         sequence: i32,
-        key: Option<Vec<u8>>,
-        value: Option<Vec<u8>>,
+        key: Option<Box<[u8]>>,
+        value: Option<Box<[u8]>>,
         headers: Vec<Header>,
     ) -> Self {
         DefaultRecord {
@@ -188,7 +188,7 @@ impl DefaultRecord {
         let key = if key_size < 0 {
             None
         } else {
-            Some(accessor.read_array(key_size as usize)?)
+            Some(accessor.read_array(key_size as usize)?.into_boxed_slice())
         };
 
         // read value
@@ -196,7 +196,7 @@ impl DefaultRecord {
         let value = if value_size < 0 {
             None
         } else {
-            Some(accessor.read_array(value_size as usize)?)
+            Some(accessor.read_array(value_size as usize)?.into_boxed_slice())
         };
 
         // read headers

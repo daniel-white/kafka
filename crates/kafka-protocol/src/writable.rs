@@ -50,3 +50,41 @@ pub trait Writable {
         self.write_int(val as i32);
     }
 }
+
+/// `Writable` implementation for `Vec<u8>` — appends bytes to the vector.
+///
+/// `Vec<u8>` is a mutable growth-capable sink, appropriate for building buffers.
+impl Writable for Vec<u8> {
+    fn write_byte(&mut self, val: u8) {
+        self.push(val);
+    }
+    fn write_short(&mut self, val: i16) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+    fn write_int(&mut self, val: i32) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+    fn write_long(&mut self, val: i64) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+    fn write_double(&mut self, val: f64) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+    fn write_byte_array(&mut self, arr: &[u8]) {
+        self.extend_from_slice(arr);
+    }
+    fn write_unsigned_varint(&mut self, val: u32) {
+        crate::byte_utils::write_unsigned_varint(val, self).unwrap();
+    }
+    fn write_byte_buffer(&mut self, buf: &[u8]) {
+        self.extend_from_slice(buf);
+    }
+    fn write_varint(&mut self, val: i32) {
+        let unsigned = ((val << 1) ^ (val >> 31)) as u32;
+        crate::byte_utils::write_unsigned_varint(unsigned, self).unwrap();
+    }
+    fn write_varlong(&mut self, val: i64) {
+        let unsigned = ((val << 1) ^ (val >> 63)) as u64;
+        crate::byte_utils::write_unsigned_varlong(unsigned, self).unwrap();
+    }
+}

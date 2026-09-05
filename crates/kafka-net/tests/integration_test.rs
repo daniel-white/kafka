@@ -16,7 +16,7 @@ use kafka_record::CompressionType;
 #[test]
 fn test_full_request_response_pipeline() {
     let header = RequestHeader::new(0, 1, 42, "integration-test");
-    let body = vec![0x00, 0x01, 0x02, 0x03];
+    let body = vec![0x00, 0x01, 0x02, 0x03].into_boxed_slice();
 
     let request = KafkaRequest::new(header.clone(), body);
     let serialized = request.serialize();

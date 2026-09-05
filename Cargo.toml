@@ -2,6 +2,11 @@
 resolver = "2"
 members = [
     "crates/kafka-protocol",
+    "crates/kafka-record",
+    "crates/kafka-common",
+    "crates/kafka-errors",
+    "crates/kafka-storage",
+    "crates/kafka-net",
 ]
 
 [workspace.package]

@@ -117,7 +117,11 @@ impl SocketServer {
     }
 }
 
-/// Handle a single TCP connection: read bytes, parse Kafka request framing.
+/// Handle a single TCP connection: read bytes, parse Kafka request framing,
+/// and send a minimal response back.
+///
+/// Currently responds to any request with an empty-body response containing
+/// only the ResponseHeader (correlation_id).
 ///
 /// Mirrors Java's SocketServer.connection handling.
 ///
@@ -126,7 +130,7 @@ pub async fn handle_connection(
     socket: &mut tokio::net::TcpStream,
     peer_addr: std::net::SocketAddr,
 ) {
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let mut conn = KafkaConnection::new();
     let mut buf = vec![0u8; 1024];
@@ -142,10 +146,18 @@ pub async fn handle_connection(
                 if conn.is_complete() {
                     if let Some(result) = conn.try_parse_request() {
                         match result {
-                            Ok(header) => println!(
-                                "Received request: api_key={}, api_version={}, correlation_id={}",
-                                header.api_key, header.api_version, header.correlation_id
-                            ),
+                            Ok(header) => {
+                                println!(
+                                    "Received request: api_key={}, api_version={}, correlation_id={}",
+                                    header.api_key,
+                                    header.api_version,
+                                    header.correlation_id
+                                );
+                                // Send back a minimal response: size header (4) + correlation_id (4)
+                                let response_size: i32 = 4;
+                                let _ = socket.write_all(&response_size.to_be_bytes()).await;
+                                let _ = socket.write_all(&header.correlation_id.to_be_bytes()).await;
+                            }
                             Err(e) => eprintln!("Parse error: {}", e),
                         }
                     }

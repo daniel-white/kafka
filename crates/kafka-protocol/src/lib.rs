@@ -5,6 +5,7 @@
 #![deny(clippy::rc_buffer)]
 #![deny(clippy::ptr_arg)]
 
+pub mod api_key;
 pub mod byte_buffer_accessor;
 pub mod byte_utils;
 pub mod errors;
@@ -14,5 +15,6 @@ pub mod tagged_fields;
 pub mod types;
 pub mod writable;
 
+pub use api_key::ApiKey;
 pub use kafka_common::uuid;
 pub use raw_tagged_field::RawTaggedField;

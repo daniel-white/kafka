@@ -6,9 +6,11 @@
 //! - core/src/main/scala/kafka/server/SocketServer.scala
 //! - clients/src/main/java/org/apache/kafka/common/network/SocketServer.java
 
-use crate::{KafkaServer, ProcessStatus};
+use crate::KafkaServer;
+use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::network_receive::NetworkReceive;
 use kafka_net::request_header::RequestHeader;
+use kafka_server_common::ProcessStatus;
 use std::sync::Arc;
 
 /// A single accepted connection.
@@ -51,6 +53,22 @@ impl KafkaConnection {
 
         let mut buf = self.receive.payload()?;
         Some(RequestHeader::read(&mut buf))
+    }
+
+    /// Parse the received data into a full KafkaRequest (header + body).
+    ///
+    /// Returns the parsed request if the receive is complete.
+    ///
+    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/clients/NetworkClient.java
+    pub fn parse_request(&self) -> Option<KafkaRequest> {
+        if !self.receive.complete() {
+            return None;
+        }
+
+        let mut buf = self.receive.payload()?;
+        let header = RequestHeader::read(&mut buf).ok()?;
+        let body = buf.to_vec().into_boxed_slice();
+        Some(KafkaRequest::new(header, body))
     }
 
     /// Check if the receive is complete (size header + full payload read).
@@ -144,22 +162,17 @@ pub async fn handle_connection(
             Ok(n) => {
                 _ = conn.feed(&buf[..n]);
                 if conn.is_complete() {
-                    if let Some(result) = conn.try_parse_request() {
-                        match result {
-                            Ok(header) => {
-                                println!(
-                                    "Received request: api_key={}, api_version={}, correlation_id={}",
-                                    header.api_key,
-                                    header.api_version,
-                                    header.correlation_id
-                                );
-                                // Send back a minimal response: size header (4) + correlation_id (4)
-                                let response_size: i32 = 4;
-                                let _ = socket.write_all(&response_size.to_be_bytes()).await;
-                                let _ = socket.write_all(&header.correlation_id.to_be_bytes()).await;
-                            }
-                            Err(e) => eprintln!("Parse error: {}", e),
-                        }
+                    if let Some(request) = conn.parse_request() {
+                        println!(
+                            "Received request: api_key={}, api_version={}, correlation_id={}",
+                            request.header.api_key,
+                            request.header.api_version,
+                            request.header.correlation_id
+                        );
+                        let response = crate::dispatch_request(&request);
+                        let _ = socket.write_all(&response).await;
+                    } else if let Some(Err(e)) = conn.try_parse_request() {
+                        eprintln!("Parse error: {}", e);
                     }
                 }
             }

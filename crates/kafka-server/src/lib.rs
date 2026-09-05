@@ -9,7 +9,11 @@ use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod request_handler;
 pub mod socket_server;
+
+pub use request_handler::dispatch as dispatch_request;
+pub use socket_server::{KafkaConnection, SocketServer};
 
 /// Server lifecycle state, managed atomically.
 ///
@@ -74,8 +78,6 @@ impl KafkaServer {
         self.status() == ProcessStatus::Started
     }
 }
-
-pub use socket_server::{handle_connection, KafkaConnection, SocketServer};
 
 impl Default for KafkaServer {
     fn default() -> Self {

@@ -1,5 +1,5 @@
 use kafka_common::Uuid;
-use kafka_server_common::{GroupTopicPartitionData, PartitionData, PartitionDataBuilder, TopicData};
+use kafka_server_common::{PartitionData, PartitionDataBuilder, TopicData};
 use rstest::rstest;
 
 // --- PartitionData tests ---
@@ -92,60 +92,4 @@ fn test_topic_data_equality() {
 
     let td3: TopicData<i32> = TopicData::new(Uuid::new(3, 4), vec![1, 2, 3]);
     assert_ne!(td1, td3);
-}
-
-// --- GroupTopicPartitionData tests ---
-
-#[test]
-fn test_group_topic_partition_data_new() {
-    let topics = vec![
-        TopicData::new(Uuid::new(1, 2), vec![]),
-        TopicData::new(Uuid::new(3, 4), vec![]),
-    ];
-    let gtp: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new("test-group".to_string(), topics);
-    assert_eq!(gtp.group_id(), "test-group");
-    assert_eq!(gtp.topics_data().len(), 2);
-}
-
-#[test]
-fn test_group_topic_partition_data_default() {
-    let gtp: GroupTopicPartitionData<i32> = GroupTopicPartitionData::default();
-    assert_eq!(gtp.group_id(), "");
-    assert!(gtp.topics_data().is_empty());
-}
-
-#[test]
-fn test_group_topic_partition_data_empty() {
-    let gtp: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new("group".to_string(), vec![]);
-    assert_eq!(gtp.group_id(), "group");
-    assert!(gtp.topics_data().is_empty());
-}
-
-#[rstest]
-#[case("group1")]
-#[case("group2")]
-#[case("")]
-#[case("my-test-group")]
-fn test_group_id(#[case] group_id: &str) {
-    let gtp: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new(group_id.to_string(), vec![]);
-    assert_eq!(gtp.group_id(), group_id);
-}
-
-#[test]
-fn test_group_topic_partition_data_equality() {
-    fn make_topics() -> Vec<TopicData<i32>> {
-        vec![TopicData::new(Uuid::new(1, 2), vec![1, 2])]
-    }
-    let a: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new("g".to_string(), make_topics());
-    let b: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new("g".to_string(), make_topics());
-    assert_eq!(a, b);
-
-    let c: GroupTopicPartitionData<i32> =
-        GroupTopicPartitionData::new("other".to_string(), make_topics());
-    assert_ne!(a, c);
 }

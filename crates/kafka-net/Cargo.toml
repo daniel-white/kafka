@@ -10,5 +10,9 @@ kafka-protocol = { path = "../kafka-protocol" }
 kafka-errors = { path = "../kafka-errors" }
 thiserror = "2"
 
+[dev-dependencies]
+kafka-record = { path = "../kafka-record" }
+kafka-compress = { path = "../kafka-compress" }
+
 [lints.rust]
 unsafe_code = "deny"

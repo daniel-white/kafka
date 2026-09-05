@@ -94,6 +94,10 @@ impl CompressionType {
     pub fn is_none(&self) -> bool {
         matches!(self, CompressionType::None)
     }
+
+    pub const fn rate(&self) -> f32 {
+        1.0
+    }
 }
 
 impl std::fmt::Display for CompressionType {

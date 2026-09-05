@@ -6,6 +6,7 @@
 
 pub mod base_records;
 pub mod compression_type;
+pub mod compression_ratio_estimator;
 pub mod errors;
 pub mod header;
 pub mod memory_records;

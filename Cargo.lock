@@ -229,8 +229,10 @@ dependencies = [
 name = "kafka-net"
 version = "0.1.0"
 dependencies = [
+ "kafka-compress",
  "kafka-errors",
  "kafka-protocol",
+ "kafka-record",
  "thiserror",
 ]
 

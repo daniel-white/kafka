@@ -25,7 +25,7 @@ pub use broker_registration::{
 pub use broker_state::BrokerState;
 pub use directory_id::DirectoryId;
 pub use feature_versions::{
-    EligibleLeaderReplicasVersion, GroupVersion, ShareVersion, StreamsVersion,
+    EligibleLeaderReplicasVersion, GroupVersion, KRaftVersion, ShareVersion, StreamsVersion,
     TransactionVersion, TV_UNKNOWN,
 };
 pub use offset_and_epoch::OffsetAndEpoch;

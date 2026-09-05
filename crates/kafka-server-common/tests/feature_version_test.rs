@@ -1,4 +1,4 @@
-use kafka_server_common::{EligibleLeaderReplicasVersion, GroupVersion, ProducerIdsBlock, ShareVersion, StreamsVersion, TransactionVersion, TV_UNKNOWN, PRODUCER_ID_BLOCK_SIZE};
+use kafka_server_common::{EligibleLeaderReplicasVersion, GroupVersion, KRaftVersion, ProducerIdsBlock, ShareVersion, StreamsVersion, TransactionVersion, TV_UNKNOWN, PRODUCER_ID_BLOCK_SIZE};
 use rstest::rstest;
 use std::sync::Arc;
 
@@ -66,6 +66,33 @@ fn test_claim_next_id_concurrent() {
     for (i, id) in all_ids.iter().enumerate() {
         assert_eq!(*id as usize, i);
     }
+}
+
+// --- KRaftVersion tests ---
+
+#[rstest]
+#[case(KRaftVersion::V0, 0)]
+#[case(KRaftVersion::V1, 1)]
+#[case(KRaftVersion::Unknown, -1)]
+fn test_kraft_version_feature_level(#[case] kv: KRaftVersion, #[case] expected: i16) {
+    assert_eq!(kv.feature_level(), expected);
+}
+
+#[test]
+fn test_kraft_version_constants() {
+    assert_eq!(KRaftVersion::FEATURE_NAME, "kraft.version");
+    assert_eq!(KRaftVersion::LATEST_PRODUCTION, KRaftVersion::V1);
+}
+
+#[test]
+fn test_kraft_version_from_feature_level() {
+    assert_eq!(KRaftVersion::from_feature_level(0), KRaftVersion::V0);
+    assert_eq!(KRaftVersion::from_feature_level(1), KRaftVersion::V1);
+}
+
+#[test]
+fn test_kraft_version_default() {
+    assert_eq!(KRaftVersion::default(), KRaftVersion::Unknown);
 }
 
 // --- StreamsVersion tests ---

@@ -125,6 +125,52 @@ impl TransactionVersion {
     }
 }
 
+/// KRaft metadata protocol versions.
+///
+/// Mirrors Java's `KRaftVersion` enum.
+///
+/// MIGRATION_SOURCE: server-common/src/main/java/org/apache/kafka/server/common/KRaftVersion.java
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum KRaftVersion {
+    /// Version 0: initial KRaft version.
+    V0,
+    /// Version 1: KIP-853 enabled.
+    V1,
+    /// Unknown KRaft version.
+    #[default]
+    Unknown,
+}
+
+impl KRaftVersion {
+    /// Feature name used in metadata.
+    pub const FEATURE_NAME: &'static str = "kraft.version";
+
+    /// Latest production version.
+    pub const LATEST_PRODUCTION: KRaftVersion = KRaftVersion::V1;
+
+    /// Feature level as a short.
+    pub fn feature_level(&self) -> i16 {
+        match self {
+            KRaftVersion::V0 => 0,
+            KRaftVersion::V1 => 1,
+            KRaftVersion::Unknown => -1,
+        }
+    }
+
+    /// Parse from a feature level.
+    ///
+    /// Mirrors Java's `fromFeatureLevel(short)`.
+    ///
+    /// MIGRATION_SOURCE: server-common/src/main/java/org/apache/kafka/server/common/KRaftVersion.java
+    pub fn from_feature_level(level: i16) -> KRaftVersion {
+        match level {
+            0 => KRaftVersion::V0,
+            1 => KRaftVersion::V1,
+            _ => panic!("Unknown KRaft feature level: {}", level),
+        }
+    }
+}
+
 /// Consumer group feature versions.
 ///
 /// Mirrors Java's `GroupVersion` enum.

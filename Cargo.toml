@@ -11,6 +11,7 @@ members = [
     "crates/kafka-metadata",
     "crates/kafka-raft",
     "crates/kafka-server-common",
+    "crates/kafka-coordinator-common",
 ]
 
 [workspace.package]

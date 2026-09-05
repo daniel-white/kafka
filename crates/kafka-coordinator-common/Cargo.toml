@@ -1,0 +1,16 @@
+[package]
+name = "kafka-coordinator-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kafka-protocol = { path = "../kafka-protocol" }
+kafka-server-common = { path = "../kafka-server-common" }
+getset = "0.1"
+thiserror = "2.0"
+
+[lints.rust]
+unsafe_code = "deny"
+
+[dev-dependencies]
+rstest = "0.22"

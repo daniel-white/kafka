@@ -1,6 +1,7 @@
 use kafka_metadata::{ApiMessageAndVersion, MetadataRecordSerde, MetadataRecordType, RecordSerde};
 use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::writable::Writable;
+use rstest::rstest;
 
 fn build_message(data: Vec<u8>, api_key: i16, version: i16) -> ApiMessageAndVersion {
     ApiMessageAndVersion::new(data, api_key, version)
@@ -8,35 +9,51 @@ fn build_message(data: Vec<u8>, api_key: i16, version: i16) -> ApiMessageAndVers
 
 // --- MetadataRecordType tests ---
 
-#[test]
-fn test_record_type_from_api_key() {
-    assert_eq!(
-        MetadataRecordType::from_api_key(0),
-        Some(MetadataRecordType::RegisterBroker)
-    );
-    assert_eq!(
-        MetadataRecordType::from_api_key(2),
-        Some(MetadataRecordType::Topic)
-    );
-    assert_eq!(
-        MetadataRecordType::from_api_key(3),
-        Some(MetadataRecordType::Partition)
-    );
-    assert_eq!(
-        MetadataRecordType::from_api_key(20),
-        Some(MetadataRecordType::NoOp)
-    );
-    assert_eq!(MetadataRecordType::from_api_key(6), None);
-    assert_eq!(MetadataRecordType::from_api_key(99), None);
-    assert_eq!(MetadataRecordType::from_api_key(-1), None);
+#[rstest]
+#[case(0, Some(MetadataRecordType::RegisterBroker))]
+#[case(1, Some(MetadataRecordType::UnregisterBroker))]
+#[case(2, Some(MetadataRecordType::Topic))]
+#[case(3, Some(MetadataRecordType::Partition))]
+#[case(4, Some(MetadataRecordType::Config))]
+#[case(20, Some(MetadataRecordType::NoOp))]
+#[case(6, None)]
+#[case(13, None)]
+#[case(99, None)]
+#[case(-1, None)]
+fn test_record_type_from_api_key(#[case] key: i16, #[case] expected: Option<MetadataRecordType>) {
+    assert_eq!(MetadataRecordType::from_api_key(key), expected);
 }
 
-#[test]
-fn test_record_type_api_key_round_trip() {
-    for key in [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 12, 14, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29] {
-        let rt = MetadataRecordType::from_api_key(key).expect("known key");
-        assert_eq!(rt.api_key(), key, "round-trip for key {}", key);
-    }
+#[rstest]
+#[case(0, MetadataRecordType::RegisterBroker)]
+#[case(1, MetadataRecordType::UnregisterBroker)]
+#[case(2, MetadataRecordType::Topic)]
+#[case(3, MetadataRecordType::Partition)]
+#[case(4, MetadataRecordType::Config)]
+#[case(5, MetadataRecordType::PartitionChange)]
+#[case(7, MetadataRecordType::FenceBroker)]
+#[case(8, MetadataRecordType::UnfenceBroker)]
+#[case(9, MetadataRecordType::RemoveTopic)]
+#[case(10, MetadataRecordType::DelegationToken)]
+#[case(12, MetadataRecordType::FeatureLevel)]
+#[case(14, MetadataRecordType::ClientQuota)]
+#[case(15, MetadataRecordType::ProducerIds)]
+#[case(17, MetadataRecordType::BrokerRegistrationChange)]
+#[case(18, MetadataRecordType::AccessControlEntry)]
+#[case(19, MetadataRecordType::RemoveAccessControlEntry)]
+#[case(20, MetadataRecordType::NoOp)]
+#[case(21, MetadataRecordType::ZkMigration)]
+#[case(22, MetadataRecordType::RemoveUserScramCredential)]
+#[case(23, MetadataRecordType::BeginTransaction)]
+#[case(24, MetadataRecordType::EndTransaction)]
+#[case(25, MetadataRecordType::AbortTransaction)]
+#[case(26, MetadataRecordType::RemoveDelegationToken)]
+#[case(27, MetadataRecordType::RegisterController)]
+#[case(28, MetadataRecordType::ClearElr)]
+#[case(29, MetadataRecordType::UnregisterController)]
+fn test_record_type_api_key_round_trip(#[case] key: i16, #[case] rt: MetadataRecordType) {
+    assert_eq!(MetadataRecordType::from_api_key(key), Some(rt));
+    assert_eq!(rt.api_key(), key);
 }
 
 #[test]

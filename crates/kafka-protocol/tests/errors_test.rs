@@ -2,52 +2,7 @@
 // MIGRATION_SOURCE: clients/src/test/java/org/apache/kafka/common/protocol/ErrorsTest.java
 
 use kafka_protocol::errors::Errors;
-
-#[test]
-fn test_unique_error_codes() {
-    let mut seen = std::collections::HashSet::new();
-    for error in all_errors() {
-        assert!(seen.insert(error.code()), "Error codes must be unique");
-    }
-    assert_eq!(seen.len(), all_errors().len());
-}
-
-#[test]
-fn test_none_exception() {
-    assert!(Errors::None.exception_name().is_none());
-}
-
-#[test]
-fn test_exception_name() {
-    assert_eq!(
-        "org.apache.kafka.common.errors.UnknownServerException",
-        Errors::UnknownServerError.exception_name().unwrap()
-    );
-    assert!(Errors::None.exception_name().is_none());
-    assert_eq!(
-        "org.apache.kafka.common.errors.InvalidTopicException",
-        Errors::InvalidTopicException.exception_name().unwrap()
-    );
-}
-
-#[test]
-fn test_for_code() {
-    assert_eq!(Errors::for_code(-1), Errors::UnknownServerError);
-    assert_eq!(Errors::for_code(0), Errors::None);
-    assert_eq!(Errors::for_code(7), Errors::RequestTimedOut);
-    assert_eq!(Errors::for_code(100), Errors::UnknownTopicId);
-    assert_eq!(Errors::for_code(999), Errors::UnknownServerError);
-}
-
-#[test]
-fn test_maybe_throw_none() {
-    assert!(Errors::None.maybe_throw().is_ok());
-}
-
-#[test]
-fn test_maybe_throw_error() {
-    assert_eq!(Errors::MessageTooLarge.maybe_throw(), Err(Errors::MessageTooLarge));
-}
+use rstest::rstest;
 
 fn all_errors() -> Vec<Errors> {
     vec![
@@ -190,4 +145,48 @@ fn all_errors() -> Vec<Errors> {
         Errors::StreamsTopologyDescriptionUpdateFailed,
         Errors::ControllerIdNotRegistered,
     ]
+}
+
+#[test]
+fn test_unique_error_codes() {
+    let mut seen = std::collections::HashSet::new();
+    for error in all_errors() {
+        assert!(seen.insert(error.code()), "Error codes must be unique");
+    }
+    assert_eq!(seen.len(), all_errors().len());
+}
+
+#[test]
+fn test_none_exception() {
+    assert!(Errors::None.exception_name().is_none());
+}
+
+#[rstest]
+#[case(Errors::UnknownServerError, "org.apache.kafka.common.errors.UnknownServerException")]
+#[case(Errors::InvalidTopicException, "org.apache.kafka.common.errors.InvalidTopicException")]
+#[case(Errors::MessageTooLarge, "org.apache.kafka.common.errors.RecordTooLargeException")]
+#[case(Errors::NetworkException, "org.apache.kafka.common.errors.NetworkException")]
+fn test_exception_name(#[case] error: Errors, #[case] expected: &str) {
+    assert_eq!(error.exception_name().unwrap(), expected);
+}
+
+#[rstest]
+#[case(-1, Errors::UnknownServerError)]
+#[case(0, Errors::None)]
+#[case(1, Errors::OffsetOutOfRange)]
+#[case(7, Errors::RequestTimedOut)]
+#[case(100, Errors::UnknownTopicId)]
+#[case(999, Errors::UnknownServerError)]
+fn test_for_code(#[case] code: i16, #[case] expected: Errors) {
+    assert_eq!(Errors::for_code(code), expected);
+}
+
+#[test]
+fn test_maybe_throw_none() {
+    assert!(Errors::None.maybe_throw().is_ok());
+}
+
+#[test]
+fn test_maybe_throw_error() {
+    assert_eq!(Errors::MessageTooLarge.maybe_throw(), Err(Errors::MessageTooLarge));
 }

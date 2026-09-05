@@ -14,6 +14,9 @@ thiserror = "2.0"
 [lints.rust]
 unsafe_code = "deny"
 
+[dev-dependencies]
+rstest = "0.22"
+
 [lib]
 name = "kafka_metadata"
 path = "src/lib.rs"

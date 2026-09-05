@@ -1,5 +1,7 @@
+use kafka_common::uuid::Uuid;
 use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::types::Type;
+use rstest::rstest;
 
 fn make_accessor(capacity: usize) -> ByteBufferAccessor {
     ByteBufferAccessor::with_capacity(capacity)
@@ -34,12 +36,14 @@ fn test_int_primitives() {
     assert_eq!(Type::UInt16.read_uint16(&mut acc).unwrap(), 65535);
     assert_eq!(Type::Int32.read_int32(&mut acc).unwrap(), -1);
     assert_eq!(Type::UnsignedInt32.read_uint32(&mut acc).unwrap(), 0xFFFFFFFF);
-    assert_eq!(Type::Int64.read_int64(&mut acc).unwrap(), -9_223_372_036_854_775_808);
+    assert_eq!(
+        Type::Int64.read_int64(&mut acc).unwrap(),
+        -9_223_372_036_854_775_808
+    );
 }
 
 #[test]
 fn test_uuid_round_trip() {
-    use kafka_common::uuid::Uuid;
     let uuid = Uuid::new(0x123456789ABCDEF0, -1);
     let mut acc = make_accessor(32);
     Type::Uuid.write_uuid(&mut acc, &uuid);
@@ -61,11 +65,32 @@ fn test_string_round_trip() {
     acc.flip();
 
     assert_eq!(Type::String.read_string(&mut acc).unwrap(), "hello");
-    assert_eq!(Type::CompactString.read_compact_string(&mut acc).unwrap(), "world");
-    assert_eq!(Type::NullableString.read_nullable_string(&mut acc).unwrap(), None);
-    assert_eq!(Type::NullableString.read_nullable_string(&mut acc).unwrap(), Some("test".to_string()));
-    assert_eq!(Type::CompactNullableString.read_compact_nullable_string(&mut acc).unwrap(), None);
-    assert_eq!(Type::CompactNullableString.read_compact_nullable_string(&mut acc).unwrap(), Some("data".to_string()));
+    assert_eq!(
+        Type::CompactString.read_compact_string(&mut acc).unwrap(),
+        "world"
+    );
+    assert_eq!(
+        Type::NullableString.read_nullable_string(&mut acc).unwrap(),
+        None
+    );
+    assert_eq!(
+        Type::NullableString
+            .read_nullable_string(&mut acc)
+            .unwrap(),
+        Some("test".to_string())
+    );
+    assert_eq!(
+        Type::CompactNullableString
+            .read_compact_nullable_string(&mut acc)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        Type::CompactNullableString
+            .read_compact_nullable_string(&mut acc)
+            .unwrap(),
+        Some("data".to_string())
+    );
 }
 
 #[test]
@@ -80,11 +105,32 @@ fn test_bytes_round_trip() {
     acc.flip();
 
     assert_eq!(Type::Bytes.read_bytes(&mut acc).unwrap(), vec![0x01, 0x02, 0x03]);
-    assert_eq!(Type::CompactBytes.read_compact_bytes(&mut acc).unwrap(), vec![0x04, 0x05]);
-    assert_eq!(Type::NullableBytes.read_nullable_bytes(&mut acc).unwrap(), None);
-    assert_eq!(Type::NullableBytes.read_nullable_bytes(&mut acc).unwrap(), Some(vec![0x06, 0x07]));
-    assert_eq!(Type::CompactNullableBytes.read_compact_nullable_bytes(&mut acc).unwrap(), None);
-    assert_eq!(Type::CompactNullableBytes.read_compact_nullable_bytes(&mut acc).unwrap(), Some(vec![0x08]));
+    assert_eq!(
+        Type::CompactBytes.read_compact_bytes(&mut acc).unwrap(),
+        vec![0x04, 0x05]
+    );
+    assert_eq!(
+        Type::NullableBytes.read_nullable_bytes(&mut acc).unwrap(),
+        None
+    );
+    assert_eq!(
+        Type::NullableBytes
+            .read_nullable_bytes(&mut acc)
+            .unwrap(),
+        Some(vec![0x06, 0x07])
+    );
+    assert_eq!(
+        Type::CompactNullableBytes
+            .read_compact_nullable_bytes(&mut acc)
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        Type::CompactNullableBytes
+            .read_compact_nullable_bytes(&mut acc)
+            .unwrap(),
+        Some(vec![0x08])
+    );
 }
 
 #[test]
@@ -114,26 +160,48 @@ fn test_float64_round_trip() {
     assert!((Type::Float64.read_float64(&mut acc).unwrap() - 3.14159).abs() < 1e-10);
 }
 
-#[test]
-fn test_type_names() {
-    assert_eq!(Type::Int8.type_name(), "INT8");
-    assert_eq!(Type::Int16.type_name(), "INT16");
-    assert_eq!(Type::Int32.type_name(), "INT32");
-    assert_eq!(Type::Int64.type_name(), "INT64");
-    assert_eq!(Type::String.type_name(), "STRING");
-    assert_eq!(Type::Uuid.type_name(), "UUID");
-    assert_eq!(Type::Varint.type_name(), "VARINT");
-    assert_eq!(Type::Varlong.type_name(), "VARLONG");
-    assert_eq!(Type::Bytes.type_name(), "BYTES");
+#[rstest]
+#[case(Type::Int8, "INT8")]
+#[case(Type::Int16, "INT16")]
+#[case(Type::Int32, "INT32")]
+#[case(Type::Int64, "INT64")]
+#[case(Type::String, "STRING")]
+#[case(Type::Uuid, "UUID")]
+#[case(Type::Varint, "VARINT")]
+#[case(Type::Varlong, "VARLONG")]
+#[case(Type::Bytes, "BYTES")]
+fn test_type_names(#[case] ty: Type, #[case] expected: &str) {
+    assert_eq!(ty.type_name(), expected);
 }
 
-#[test]
-fn test_is_nullable() {
-    assert!(!Type::String.is_nullable());
-    assert!(Type::NullableString.is_nullable());
-    assert!(Type::CompactNullableString.is_nullable());
-    assert!(Type::NullableBytes.is_nullable());
-    assert!(!Type::Int32.is_nullable());
+#[rstest]
+#[case(Type::String, false)]
+#[case(Type::NullableString, true)]
+#[case(Type::CompactNullableString, true)]
+#[case(Type::NullableBytes, true)]
+#[case(Type::CompactNullableBytes, true)]
+#[case(Type::Int32, false)]
+#[case(Type::Uuid, false)]
+fn test_is_nullable(#[case] ty: Type, #[case] expected: bool) {
+    assert_eq!(ty.is_nullable(), expected);
+}
+
+#[rstest]
+#[case(Type::Int8, 1)]
+#[case(Type::Int16, 2)]
+#[case(Type::Int32, 4)]
+#[case(Type::Int64, 8)]
+#[case(Type::Uuid, 16)]
+fn test_int_size(#[case] ty: Type, #[case] expected: usize) {
+    let actual = match ty {
+        Type::Int8 => ty.size_of_int8(),
+        Type::Int16 => ty.size_of_int16(),
+        Type::Int32 => ty.size_of_int32(),
+        Type::Int64 => ty.size_of_int64(),
+        Type::Uuid => ty.size_of_uuid(),
+        _ => unreachable!(),
+    };
+    assert_eq!(actual, expected);
 }
 
 #[test]

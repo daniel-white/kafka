@@ -171,3 +171,101 @@ impl GroupVersion {
         self.feature_level() >= GroupVersion::V1.feature_level()
     }
 }
+
+/// Streams group feature versions.
+///
+/// Mirrors Java's `StreamsVersion` enum.
+///
+/// MIGRATION_SOURCE: server-common/src/main/java/org/apache/kafka/server/common/StreamsVersion.java
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum StreamsVersion {
+    /// Version 0: streams groups disabled.
+    V0,
+    /// Version 1: streams groups enabled (KIP-1071).
+    V1,
+    /// Unknown streams version.
+    #[default]
+    Unknown,
+}
+
+impl StreamsVersion {
+    /// Feature name used in metadata.
+    pub const FEATURE_NAME: &'static str = "streams.version";
+
+    /// Latest production version.
+    pub const LATEST_PRODUCTION: StreamsVersion = StreamsVersion::V1;
+
+    /// Feature level as a short.
+    pub fn feature_level(&self) -> i16 {
+        match self {
+            StreamsVersion::V0 => 0,
+            StreamsVersion::V1 => 1,
+            StreamsVersion::Unknown => -1,
+        }
+    }
+
+    /// Parse from a feature level.
+    pub fn from_feature_level(level: i16) -> StreamsVersion {
+        match level {
+            0 => StreamsVersion::V0,
+            1 => StreamsVersion::V1,
+            _ => panic!("Unknown streams feature level: {}", level),
+        }
+    }
+
+    /// Check if streams groups are supported.
+    pub fn streams_group_supported(&self) -> bool {
+        self.feature_level() >= StreamsVersion::V1.feature_level()
+    }
+}
+
+/// Eligible Leader Replicas (ELR) feature versions.
+///
+/// Mirrors Java's `EligibleLeaderReplicasVersion` enum.
+///
+/// MIGRATION_SOURCE: server-common/src/main/java/org/apache/kafka/server/common/EligibleLeaderReplicasVersion.java
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum EligibleLeaderReplicasVersion {
+    /// Version 0: ELR disabled.
+    V0,
+    /// Version 1: ELR enabled (KIP-966).
+    V1,
+    /// Unknown ELR version.
+    #[default]
+    Unknown,
+}
+
+impl EligibleLeaderReplicasVersion {
+    /// Feature name used in metadata.
+    pub const FEATURE_NAME: &'static str = "eligible.leader.replicas.version";
+
+    /// Latest production version.
+    pub const LATEST_PRODUCTION: EligibleLeaderReplicasVersion = EligibleLeaderReplicasVersion::V1;
+
+    /// Feature level as a short.
+    pub fn feature_level(&self) -> i16 {
+        match self {
+            EligibleLeaderReplicasVersion::V0 => 0,
+            EligibleLeaderReplicasVersion::V1 => 1,
+            EligibleLeaderReplicasVersion::Unknown => -1,
+        }
+    }
+
+    /// Parse from a feature level.
+    pub fn from_feature_level(level: i16) -> EligibleLeaderReplicasVersion {
+        match level {
+            0 => EligibleLeaderReplicasVersion::V0,
+            1 => EligibleLeaderReplicasVersion::V1,
+            _ => panic!(
+                "Unknown eligible leader replicas feature level: {}",
+                level
+            ),
+        }
+    }
+
+    /// Check if ELR is enabled.
+    pub fn is_elr_enabled(&self) -> bool {
+        self.feature_level() >= EligibleLeaderReplicasVersion::V1.feature_level()
+    }
+}
+

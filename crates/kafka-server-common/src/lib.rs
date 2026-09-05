@@ -18,7 +18,8 @@ pub use api_error::ApiError;
 pub use broker_state::BrokerState;
 pub use directory_id::DirectoryId;
 pub use feature_versions::{
-    GroupVersion, ShareVersion, TransactionVersion, TV_UNKNOWN,
+    EligibleLeaderReplicasVersion, GroupVersion, ShareVersion, StreamsVersion,
+    TransactionVersion, TV_UNKNOWN,
 };
 pub use offset_and_epoch::OffsetAndEpoch;
 pub use producer_ids_block::{ProducerIdsBlock, PRODUCER_ID_BLOCK_SIZE};

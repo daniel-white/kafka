@@ -1,4 +1,4 @@
-use kafka_server_common::{GroupVersion, ProducerIdsBlock, ShareVersion, TransactionVersion, TV_UNKNOWN, PRODUCER_ID_BLOCK_SIZE};
+use kafka_server_common::{EligibleLeaderReplicasVersion, GroupVersion, ProducerIdsBlock, ShareVersion, StreamsVersion, TransactionVersion, TV_UNKNOWN, PRODUCER_ID_BLOCK_SIZE};
 use rstest::rstest;
 use std::sync::Arc;
 
@@ -68,7 +68,76 @@ fn test_claim_next_id_concurrent() {
     }
 }
 
-// --- ShareVersion tests ---
+// --- StreamsVersion tests ---
+
+#[rstest]
+#[case(StreamsVersion::V0, 0)]
+#[case(StreamsVersion::V1, 1)]
+#[case(StreamsVersion::Unknown, -1)]
+fn test_streams_version_feature_level(#[case] sv: StreamsVersion, #[case] expected: i16) {
+    assert_eq!(sv.feature_level(), expected);
+}
+
+#[rstest]
+#[case(StreamsVersion::V0, false)]
+#[case(StreamsVersion::V1, true)]
+fn test_streams_group_supported(#[case] sv: StreamsVersion, #[case] expected: bool) {
+    assert_eq!(sv.streams_group_supported(), expected);
+}
+
+#[test]
+fn test_streams_version_constants() {
+    assert_eq!(StreamsVersion::FEATURE_NAME, "streams.version");
+    assert_eq!(StreamsVersion::LATEST_PRODUCTION, StreamsVersion::V1);
+}
+
+#[test]
+fn test_streams_version_from_feature_level() {
+    assert_eq!(StreamsVersion::from_feature_level(0), StreamsVersion::V0);
+    assert_eq!(StreamsVersion::from_feature_level(1), StreamsVersion::V1);
+}
+
+// --- EligibleLeaderReplicasVersion tests ---
+
+#[rstest]
+#[case(EligibleLeaderReplicasVersion::V0, 0)]
+#[case(EligibleLeaderReplicasVersion::V1, 1)]
+#[case(EligibleLeaderReplicasVersion::Unknown, -1)]
+fn test_elrv_feature_level(#[case] v: EligibleLeaderReplicasVersion, #[case] expected: i16) {
+    assert_eq!(v.feature_level(), expected);
+}
+
+#[rstest]
+#[case(EligibleLeaderReplicasVersion::V0, false)]
+#[case(EligibleLeaderReplicasVersion::V1, true)]
+fn test_elr_enabled(#[case] v: EligibleLeaderReplicasVersion, #[case] expected: bool) {
+    assert_eq!(v.is_elr_enabled(), expected);
+}
+
+#[test]
+fn test_elrv_constants() {
+    assert_eq!(
+        EligibleLeaderReplicasVersion::FEATURE_NAME,
+        "eligible.leader.replicas.version"
+    );
+    assert_eq!(
+        EligibleLeaderReplicasVersion::LATEST_PRODUCTION,
+        EligibleLeaderReplicasVersion::V1
+    );
+}
+
+#[test]
+fn test_elrv_from_feature_level() {
+    assert_eq!(
+        EligibleLeaderReplicasVersion::from_feature_level(0),
+        EligibleLeaderReplicasVersion::V0
+    );
+    assert_eq!(
+        EligibleLeaderReplicasVersion::from_feature_level(1),
+        EligibleLeaderReplicasVersion::V1
+    );
+}
+
 
 #[rstest]
 #[case(ShareVersion::V0, 0)]

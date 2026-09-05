@@ -9,6 +9,7 @@ members = [
     "crates/kafka-net",
     "crates/kafka-compress",
     "crates/kafka-metadata",
+    "crates/kafka-raft",
 ]
 
 [workspace.package]

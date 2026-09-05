@@ -1,0 +1,19 @@
+[package]
+name = "kafka-record"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+kafka-protocol = { path = "../kafka-protocol" }
+kafka-errors = { path = "../kafka-errors" }
+thiserror = "2"
+crc32c = "0.6"
+getset = "0.1"
+
+[dev-dependencies]
+proptest = "1"
+
+[lints.rust]
+unsafe_code = "deny"

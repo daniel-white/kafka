@@ -58,8 +58,8 @@ async fn test_e2e_api_versions_request() {
 
     let mut stream = TcpStream::connect(addr).await.unwrap();
 
-    // ApiVersions: api_key=15, version=3, correlation_id=42
-    let request = build_request(15, 3, 42);
+    // ApiVersions: api_key=18, version=3, correlation_id=42
+    let request = build_request(18, 3, 42);
     stream.write_all(&request).await.unwrap();
 
     // Read the response
@@ -71,17 +71,26 @@ async fn test_e2e_api_versions_request() {
     let cid = parse_correlation_id(response).expect("Failed to parse response");
     assert_eq!(cid, 42, "Response correlation_id should match request");
 
-    // Verify ApiVersions response body (v3):
-    //   [correlation_id:4][tagged_fields:1(varint 0)][throttle_time_ms:4][compact_array_count:1(varint)][...]
-    assert!(response.len() >= 13, "Response too short: {} bytes", response.len());
+    // Verify ApiVersions response body (v3 flexible):
+    //   [response_header: correlation_id(4)] — ApiVersions response header is ALWAYS non-flexible
+    //   [body: error_code(2) + api_keys COMPACT_ARRAY + throttle_time_ms(4) + tagged_fields(1)]
+    //
+    // Layout (non-flexible response header):
+    //   offset 0-3:   size (int32)
+    //   offset 4-7:   correlation_id (int32)
+    //   offset 8-9:   error_code (int16) = 0
+    //   offset 10:    COMPACT_ARRAY count (varint = 6 for 5 entries + 1)
+    //   then 5 * (api_key:2 + min:2 + max:2 + tagged_fields:1) = 5 * 7 = 35 bytes
+    //   then throttle_time_ms (int32)
+    //   then top-level tagged_fields (varint 0)
+    assert!(response.len() >= 12, "Response too short: {} bytes", response.len());
 
-    // throttle_time_ms should be 0
-    let throttle_time = i32::from_be_bytes(response[9..13].try_into().unwrap());
-    assert_eq!(throttle_time, 0, "Expected throttle_time_ms=0, got {}", throttle_time);
+    // error_code should be 0 (NO_ERROR)
+    let error_code = i16::from_be_bytes(response[8..10].try_into().unwrap());
+    assert_eq!(error_code, 0, "Expected error_code=0 (NO_ERROR), got {}", error_code);
 
-    // The compact array count for api_versions should be >= 1 (at offset 13 after header+throttle)
-    let array_count_byte = response[13];
-    assert!(array_count_byte >= 1, "Expected non-empty api_versions array");
+    // The compact array count should be 6 (5 entries + 1)
+    assert_eq!(response[10], 6, "Expected COMPACT_ARRAY count of 6 (5 entries + 1), got {}", response[10]);
 
     server.shutdown();
 }
@@ -91,8 +100,8 @@ async fn test_e2e_multiple_requests() {
     let (server, addr, _handle) = start_test_broker().await;
 
     for corr_id in 1..=3 {
-        // Mix of api keys: ApiVersions (15) and Produce (0)
-        let api_key = if corr_id % 2 == 1 { 15 } else { 0 };
+        // Mix of api keys: ApiVersions (18) and Produce (0)
+        let api_key = if corr_id % 2 == 1 { 18 } else { 0 };
         let mut stream = TcpStream::connect(addr).await.unwrap();
         let request = build_request(api_key, 3, corr_id);
         stream.write_all(&request).await.unwrap();
@@ -116,8 +125,8 @@ async fn test_e2e_metadata_request() {
 
     let mut stream = TcpStream::connect(addr).await.unwrap();
 
-    // Metadata: api_key=1, correlation_id=99
-    let request = build_request(1, 0, 99);
+    // Metadata: api_key=3, correlation_id=99
+    let request = build_request(3, 0, 99);
     stream.write_all(&request).await.unwrap();
 
     let mut buf = vec![0u8; 1024];

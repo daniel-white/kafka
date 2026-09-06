@@ -1,6 +1,7 @@
 use kafka_metadata::{ApiMessageAndVersion, MetadataRecordSerde, MetadataRecordType, RecordSerde};
 use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::writable::Writable;
+use kafka_protocol::reader::Reader;
+use kafka_protocol::writer::Writer;
 use rstest::rstest;
 
 fn build_message(data: Vec<u8>, api_key: i16, version: i16) -> ApiMessageAndVersion {

@@ -12,8 +12,7 @@
 
 use kafka_server::{KafkaServer, SocketServer};
 use kafka_server_common::ProcessStatus;
-use rdkafka::consumer::{Consumer, StreamConsumer};
-use rdkafka::producer::FutureProducer;
+use rdkafka::producer::{FutureProducer, Producer};
 use rdkafka::producer::FutureRecord;
 use rdkafka::ClientConfig;
 use std::sync::Arc;
@@ -37,11 +36,18 @@ async fn start_test_broker(
     let listener = socket_server.bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
+    // Set the broker's advertised endpoint so Metadata responses use the
+    // correct host:port that librdkafka can actually connect to.
+    {
+        let mut state = server.state().write().unwrap();
+        state.set_broker_endpoint(addr.ip().to_string(), addr.port() as i32);
+    }
+
     let handle = tokio::spawn(async move {
         socket_server.accept_loop(listener).await;
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(100)).await;
     (server, addr, handle)
 }
 
@@ -127,6 +133,28 @@ async fn test_rdkafka_receives_api_versions() {
     assert_eq!(server.status(), ProcessStatus::Started);
     let delivery = result.expect("Timeout waiting for produce");
     delivery.expect("Produce should succeed");
+
+    server.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rdkafka_receives_metadata() {
+    let (server, addr, _handle) = start_test_broker("test-topic").await;
+
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &addr.to_string()[..])
+        .set("socket.timeout.ms", "1000")
+        .set("message.timeout.ms", "500")
+        .create()
+        .expect("Failed to create rdkafka producer");
+
+    let metadata = producer
+        .client()
+        .fetch_metadata(None, Some(Duration::from_secs(5)))
+        .expect("Failed to fetch metadata");
+
+    assert!(!metadata.topics().is_empty(), "Should receive at least one topic");
+    assert_eq!(metadata.topics()[0].name(), "test-topic");
 
     server.shutdown();
 }

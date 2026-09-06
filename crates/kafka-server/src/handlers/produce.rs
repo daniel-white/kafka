@@ -8,8 +8,11 @@
 use crate::handlers::build_response_frame;
 use crate::server_state::ServerState;
 use kafka_net::kafka_request::KafkaRequest;
-use kafka_protocol::byte_utils;
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
+use kafka_protocol::produce_response::{
+    PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
+};
+use kafka_protocol::{MessageContext, Writable};
 
 /// Parsed Produce request details for one topic-partition.
 ///
@@ -125,12 +128,24 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
             let partition_index = i32::from_be_bytes(buf[0..4].try_into().unwrap());
             buf = &buf[4..];
 
-            // record_set: INT32 length + raw record batch bytes
-            if buf.len() < 4 {
-                break;
-            }
-            let batch_len = i32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
-            buf = &buf[4..];
+            // record_set: size prefix + raw record batch bytes
+            // For flexible versions (v9+), librdkafka writes the size as a uvarint
+            // (via rd_kafka_buf_finalize_arraycnt). For non-flexible, it's INT32.
+            let batch_len: usize = if is_flexible {
+                let (raw, consumed) = match read_unsigned_varint_from_slice(buf) {
+                    Ok(v) => v,
+                    Err(_) => break,
+                };
+                buf = &buf[consumed..];
+                raw.saturating_sub(1) as usize  // uvarint count has +1 base
+            } else {
+                if buf.len() < 4 {
+                    break;
+                }
+                let len = i32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
+                buf = &buf[4..];
+                len
+            };
             if buf.len() >= batch_len {
                 let record_batch = buf[..batch_len].to_vec();
                 result.push(ProduceTopicPartition {
@@ -138,6 +153,7 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
                     partition_index,
                     record_batch,
                 });
+                buf = &buf[batch_len..];
             }
         }
     }
@@ -145,7 +161,7 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
     result
 }
 
-/// Handle a Produce request: extract topic/partition info, append records
+/// Handle a Produce request: extract topic-partition info, append records
 /// to the log, and return a Produce response with the assigned base_offset.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
@@ -177,8 +193,7 @@ pub fn handle_produce(request: &KafkaRequest, state: &mut ServerState) -> Vec<u8
     )
 }
 
-/// Build a Produce response echoing back topics/partitions from the request,
-/// with actual base_offset values from the log append.
+/// Build a Produce response using the trait-based ProduceResponse struct.
 ///
 /// MIGRATION_SOURCE: clients/.../ProduceResponse.java
 fn build_produce_response(
@@ -188,56 +203,32 @@ fn build_produce_response(
     parts: &[ProduceTopicPartition],
     base_offsets: &[i64],
 ) -> Vec<u8> {
-    let mut body = Vec::new();
-    let body_is_flexible = api_version >= 9;
-
-    // responses ARRAY / COMPACT_ARRAY
-    if body_is_flexible {
-        byte_utils::write_unsigned_varint((parts.len() + 1) as u32, &mut body).unwrap();
-    } else {
-        body.extend_from_slice(&(parts.len() as i32).to_be_bytes());
-    }
+    let mut topics = Vec::new();
 
     for (i, part) in parts.iter().enumerate() {
         let base_offset = base_offsets.get(i).copied().unwrap_or(0);
 
-        if body_is_flexible {
-            // topic_name: COMPACT_STRING
-            byte_utils::write_unsigned_varint((part.topic_name.len() + 1) as u32, &mut body).unwrap();
-            body.extend_from_slice(part.topic_name.as_bytes());
-            // partitions: COMPACT_ARRAY (1 partition)
-            byte_utils::write_unsigned_varint(2, &mut body).unwrap();
-            body.extend_from_slice(&part.partition_index.to_be_bytes()); // partition_index
-            body.extend_from_slice(&0i16.to_be_bytes()); // error_code = NO_ERROR
-            body.extend_from_slice(&base_offset.to_be_bytes()); // base_offset
-            if api_version >= 6 {
-                body.extend_from_slice(&0i64.to_be_bytes()); // log_append_time_ms = 0 (v6+)
-            }
-            byte_utils::write_unsigned_varint(0, &mut body).unwrap(); // tagged_fields
-            byte_utils::write_unsigned_varint(0, &mut body).unwrap(); // topic tagged_fields
-        } else {
-            // topic_name: STRING
-            body.extend_from_slice(&(part.topic_name.len() as i16).to_be_bytes());
-            body.extend_from_slice(part.topic_name.as_bytes());
-            // partitions: ARRAY (1 partition)
-            body.extend_from_slice(&1i32.to_be_bytes());
-            body.extend_from_slice(&part.partition_index.to_be_bytes()); // partition_index
-            body.extend_from_slice(&0i16.to_be_bytes()); // error_code = NO_ERROR
-            body.extend_from_slice(&base_offset.to_be_bytes()); // base_offset
-            if api_version >= 1 {
-                body.extend_from_slice(&0i64.to_be_bytes()); // log_append_time_ms = 0
-            }
-        }
+        let partition = PartitionProduceResponse {
+            index: part.partition_index,
+            error_code: 0,
+            base_offset,
+            log_append_time_ms: 0,
+            log_start_offset: 0,
+            record_errors: Vec::new(),
+            error_message: None,
+            current_leader: None,
+        };
+
+        topics.push(TopicProduceResponse::new(
+            part.topic_name.clone(),
+            vec![partition],
+        ));
     }
 
-    // v6+ has throttle_time_ms
-    if api_version >= 6 {
-        body.extend_from_slice(&0i32.to_be_bytes());
-    }
-    // tagged_fields at the end (flexible body only)
-    if body_is_flexible {
-        byte_utils::write_unsigned_varint(0, &mut body).unwrap();
-    }
+    let response = ProduceResponse::new(topics, 0, 0);
+    let ctx = MessageContext::new(api_version, is_flexible);
+    let mut body = Vec::new();
+    response.write_body(&mut body, &ctx);
 
     build_response_frame(correlation_id, is_flexible, body)
 }

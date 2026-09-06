@@ -26,8 +26,8 @@ use crate::record_batch::{
 use kafka_errors::KafkaError;
 use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::byte_utils::{size_of_varint, size_of_varlong};
-use kafka_protocol::readable::Readable;
-use kafka_protocol::writable::Writable;
+use kafka_protocol::reader::Reader;
+use kafka_protocol::writer::Writer;
 
 /// A single record in the magic v2+ format.
 ///
@@ -149,7 +149,7 @@ impl DefaultRecord {
     /// Read a record from `readable`.
     ///
     /// Mirrors `DefaultRecord.readFrom(ByteBuffer, baseOffset, baseTimestamp, baseSequence, logAppendTime)`.
-    pub fn read_from<R: Readable>(
+    pub fn read_from<R: Reader>(
         readable: &mut R,
         base_offset: i64,
         base_timestamp: i64,
@@ -232,7 +232,7 @@ impl DefaultRecord {
         ))
     }
 
-    fn read_headers<R: Readable>(
+    fn read_headers<R: Reader>(
         readable: &mut R,
         num_headers: i32,
     ) -> Result<Vec<Header>, RecordError> {
@@ -264,7 +264,7 @@ impl DefaultRecord {
     /// Write the record to `writable` and return the total size in bytes written.
     ///
     /// Mirrors `DefaultRecord.writeTo(DataOutputStream, ...)`.
-    pub fn write_to<W: Writable>(
+    pub fn write_to<W: Writer>(
         writable: &mut W,
         offset_delta: i32,
         timestamp_delta: i64,

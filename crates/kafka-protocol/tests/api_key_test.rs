@@ -10,10 +10,10 @@ fn test_produce_key() {
 
 #[test]
 fn test_api_versions_key() {
-    let key = ApiKey::from_id(15);
+    let key = ApiKey::from_id(18);
     assert_eq!(key, ApiKey::ApiVersions);
     assert_eq!(key.name(), "ApiVersions");
-    assert_eq!(key.id(), 15);
+    assert_eq!(key.id(), 18);
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn test_unknown_key() {
 #[test]
 fn test_versions() {
     let produce = ApiKey::Produce;
-    assert_eq!(produce.min_version(), 0);
+    assert_eq!(produce.min_version(), 3);
     assert_eq!(produce.max_version(), 13);
 }
 

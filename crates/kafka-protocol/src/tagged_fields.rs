@@ -14,8 +14,8 @@
 
 use crate::byte_utils;
 use crate::raw_tagged_field::RawTaggedField;
-use crate::readable::Readable;
-use crate::writable::Writable;
+use crate::reader::Reader;
+use crate::writer::Writer;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +57,7 @@ impl TaggedFields {
 
     /// Read tagged fields from `readable`.
     /// Returns the number of bytes read.
-    pub fn read_from<R: Readable>(readable: &mut R) -> Result<Self, crate::errors::ProtocolError> {
+    pub fn read_from<R: Reader>(readable: &mut R) -> Result<Self, crate::errors::ProtocolError> {
         let count = readable.read_unsigned_varint()?;
         let mut fields: BTreeMap<i32, Vec<RawTaggedField>> = BTreeMap::new();
         for _ in 0..count {
@@ -71,7 +71,7 @@ impl TaggedFields {
     }
 
     /// Write tagged fields to `writable`.
-    pub fn write_to<W: Writable>(&self, writable: &mut W) {
+    pub fn write_to<W: Writer>(&self, writable: &mut W) {
         let total: usize = self.fields.values().map(|v| v.len()).sum();
         writable.write_unsigned_varint(total as u32);
         for (tag, list) in self.fields.iter() {

@@ -21,10 +21,10 @@ use kafka_protocol::byte_utils;
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-pub fn handle_api_versions(correlation_id: i32, api_version: i16, is_flexible: bool) -> Vec<u8> {
+pub fn handle_api_versions(correlation_id: i32, api_version: i16, _is_flexible: bool) -> Vec<u8> {
     // (api_key, min_version, max_version) — only APIs the server actually handles
     let api_entries: &[(i16, i16, i16)] = &[
-        (0, 0, 13),    // Produce
+        (0, 3, 13),    // Produce
         (1, 0, 16),    // Fetch
         (2, 0, 5),     // ListOffsets
         (3, 0, 13),    // Metadata
@@ -58,12 +58,20 @@ pub fn handle_api_versions(correlation_id: i32, api_version: i16, is_flexible: b
     }
 
     // ThrottleTimeMs: INT32 = 0 (v1+, ignorable)
-    body.extend_from_slice(&0i32.to_be_bytes());
+    if api_version >= 1 {
+        body.extend_from_slice(&0i32.to_be_bytes());
+    }
 
     // Top-level tagged_fields (v3+ only)
     if body_is_flexible {
         byte_utils::write_unsigned_varint(0, &mut body).unwrap();
     }
 
-    build_response_frame(correlation_id, is_flexible, body)
+    // Per the Kafka spec (KIP-511): ApiVersionsResponse always uses a non-flexible
+    // response header (header version 0), even when the request has a flexible header.
+    // Tagged fields are supported in the body only (for v3+).
+    let body_is_flexible = api_version >= 3;
+    let _ = body_is_flexible; // body flexibility is handled in write_body via ctx.api_version
+
+    build_response_frame(correlation_id, false, body)
 }

@@ -21,6 +21,8 @@ pub struct ServerState {
     pub logs: HashMap<(String, i32), Vec<Box<[u8]>>>,
     /// Offset tracker per topic-partition.
     pub offsets: HashMap<(String, i32), i64>,
+    /// The broker's advertised endpoint (host, port) for Metadata responses.
+    pub broker_endpoint: Option<(String, i32)>,
 }
 
 /// Topic metadata including state.
@@ -59,6 +61,7 @@ impl ServerState {
             topics: HashMap::new(),
             logs: HashMap::new(),
             offsets: HashMap::new(),
+            broker_endpoint: None,
         }
     }
 
@@ -124,5 +127,15 @@ impl ServerState {
                 .collect(),
             None => Vec::new(),
         }
+    }
+
+    /// Set the broker's advertised endpoint (host, port) for Metadata responses.
+    pub fn set_broker_endpoint(&mut self, host: String, port: i32) {
+        self.broker_endpoint = Some((host, port));
+    }
+
+    /// Get the broker's advertised endpoint, or default to localhost:9092.
+    pub fn get_broker_endpoint(&self) -> (String, i32) {
+        self.broker_endpoint.clone().unwrap_or(("localhost".to_string(), 9092))
     }
 }

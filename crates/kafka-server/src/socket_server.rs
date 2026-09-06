@@ -159,25 +159,19 @@ pub async fn handle_connection(
                         break;
                     }
 
-                    if let Some(request) = conn.parse_request() {
-                        eprintln!(
-                            "Received request: api_key={}, api_version={}, correlation_id={}",
-                            request.header.api_key,
-                            request.header.api_version,
-                            request.header.correlation_id
-                        );
-                        eprintln!("DEBUG: body {} bytes: {:02x?}", request.body.len(), &request.body[0..request.body.len().min(40)]);
-                        let response = dispatch(&request, state);
-                        eprintln!("DEBUG: response {} bytes", response.len());
-                        let _ = socket.write_all(&response).await;
-                    } else {
-                        // Log the raw payload for debugging
-                        if let Some(payload) = conn.payload() {
-                            eprintln!("DEBUG: parse_request returned None, payload {} bytes: {:02x?}", payload.len(), &payload[..payload.len().min(40)]);
-                        }
-                    }
-
-                    conn = KafkaConnection::new();
+                     if let Some(request) = conn.parse_request() {
+                           eprintln!(
+                               "Received request: api_key={}, api_version={}, correlation_id={}, is_flexible={}, client_id={:?}",
+                               request.header.api_key,
+                               request.header.api_version,
+                               request.header.correlation_id,
+                               request.header.flexible,
+                               request.header.client_id
+                           );
+                           let response = dispatch(&request, state);
+                           let _ = socket.write_all(&response).await;
+                     }
+                     conn = KafkaConnection::new();
                     if offset >= n {
                         break;
                     }

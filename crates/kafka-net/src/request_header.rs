@@ -93,20 +93,21 @@ impl RequestHeader {
         varint_size((s.len() + 1) as u32) + s.len()
     }
 
-    /// Read a RequestHeader, handling both non-flexible (v0/v1) and flexible (v2+) headers.
+    /// Read a request header, handling both non-flexible and flexible formats.
     ///
     /// Header flexibility is NOT determined by api_version alone — some clients (like rdkafka)
-    /// send non-flexible headers even for api_version >= 2. We detect it by examining the
-    /// raw bytes after the 8-byte fixed header (api_key + api_version + correlation_id).
+    /// send flexible headers even when the client_id is written as a STRING (non-compact).
+    /// We detect flexibility by examining the raw bytes after the 8-byte fixed header.
     ///
     /// Detection logic after the fixed header:
-    /// - Non-flexible client_id is a STRING with int16 length prefix. For strings < 256 bytes,
-    ///   the first byte is 0x00 (MSB of int16 length).
-    /// - Flexible client_id is a COMPACT_STRING with unsigned varint length prefix. The raw_len
-    ///   for a compact_string is actual_len + 1 (minimum 1 for empty), so the varint first byte
-    ///   is at least 0x01.
-    /// - If the first byte after the fixed header is 0x00 → non-flexible
-    /// - Otherwise → flexible
+    /// - Flexible client_id is a COMPACT_STRING with unsigned varint length prefix.
+    ///   The varint for actual_len+1 is always >= 1, so the first byte is >= 0x01.
+    /// - If the first byte is 0x00, it could be:
+    ///   a) Non-flexible: MSB of i16(0..127) string length
+    ///   b) Flexible with null compact_string (uvarint 0)
+    /// - For case (a), after the STRING we check for a trailing tagged_fields
+    ///   byte (uvarint 0). If present AND the api_version supports flexible headers,
+    ///   this is actually a librdkafka-style flexible header that writes client_id as STRING.
     ///
     /// MIGRATION_SOURCE:
     ///   clients/src/main/java/org/apache/kafka/common/protocol/Protocol.java
@@ -142,8 +143,32 @@ impl RequestHeader {
             let (header, rest) = Self::read_flexible(after_fixed, api_key, api_version, correlation_id)?;
             Ok((header, rest))
         } else {
-            // Non-flexible header: client_id is STRING
+            // Could be non-flexible (client_id as STRING, no header tags)
+            // or a librdkafka-style flexible header (client_id as STRING + trailing header tags byte)
             let (header, rest) = Self::read_non_flexible(after_fixed, api_key, api_version, correlation_id)?;
+            // Check if there are remaining bytes that look like empty tagged_fields (uvarint 0)
+            // Only do this check if the api_version supports flexible headers (>= 2 for most APIs,
+            // >= 9 for Metadata/Fetch/Produce). Without this check, we'd misinterpret
+            // a body byte of 0x00 as a header tags byte.
+            let supports_flexible = api_version >= 2;
+            if supports_flexible {
+                if let Some(byte) = rest.first() {
+                    if *byte == 0x00 {
+                        // This looks like a trailing tagged_fields byte (empty tags)
+                        // librdkafka writes client_id as STRING even in flexible headers
+                        return Ok((
+                            RequestHeader {
+                                api_key,
+                                api_version,
+                                correlation_id,
+                                client_id: header.client_id,
+                                flexible: true,
+                            },
+                            &rest[1..],
+                        ));
+                    }
+                }
+            }
             Ok((header, rest))
         }
     }

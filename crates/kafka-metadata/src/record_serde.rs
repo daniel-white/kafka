@@ -7,7 +7,7 @@
 //! - server-common/src/main/java/org/apache/kafka/server/common/serialization/AbstractApiMessageSerde.java
 
 use crate::api_message::ApiMessageAndVersion;
-use kafka_protocol::{byte_utils, readable::Readable, writable::Writable};
+use kafka_protocol::{byte_utils, reader::Reader, writer::Writer};
 
 /// Frame version written before the API key.
 /// Mirrors `DEFAULT_FRAME_VERSION = 1` in `AbstractApiMessageSerde`.
@@ -22,7 +22,7 @@ pub trait RecordSerde<T> {
     /// Deserialize a message from the readable buffer.
     ///
     /// `remaining` is the number of bytes left in the enclosing record.
-    fn read<R: Readable>(
+    fn read<R: Reader>(
         &self,
         readable: &mut R,
         remaining: usize,
@@ -38,7 +38,7 @@ pub trait RecordSerde<T> {
     ///   api_key          unsigned varint
     ///   api_version      unsigned varint
     ///   body              message body bytes
-    fn write<W: Writable>(&self, data: &T, writable: &mut W);
+    fn write<W: Writer>(&self, data: &T, writable: &mut W);
 }
 
 /// Concrete serde for framing `ApiMessageAndVersion` records.
@@ -54,7 +54,7 @@ pub trait RecordSerde<T> {
 pub struct MetadataRecordSerde;
 
 impl RecordSerde<ApiMessageAndVersion> for MetadataRecordSerde {
-    fn read<R: Readable>(
+    fn read<R: Reader>(
         &self,
         readable: &mut R,
         remaining: usize,
@@ -94,7 +94,7 @@ impl RecordSerde<ApiMessageAndVersion> for MetadataRecordSerde {
             + data.data().len()
     }
 
-    fn write<W: Writable>(&self, data: &ApiMessageAndVersion, writable: &mut W) {
+    fn write<W: Writer>(&self, data: &ApiMessageAndVersion, writable: &mut W) {
         writable.write_unsigned_varint(DEFAULT_FRAME_VERSION);
         writable.write_unsigned_varint(data.api_key() as u32);
         writable.write_unsigned_varint(data.version() as u32);

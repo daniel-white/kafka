@@ -1,16 +1,16 @@
-//! ByteBufferAccessor: a `Readable` + `Writable` backed by a growable byte buffer.
+//! ByteBufferAccessor: a `Reader` + `Writer` backed by a growable byte buffer.
 //!
 //! Mirrors Java's `ByteBufferAccessor` which wraps `java.nio.ByteBuffer`.
 //!
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/ByteBufferAccessor.java
 
 use crate::byte_utils;
-use crate::readable::Readable;
-use crate::writable::Writable;
+use crate::reader::Reader;
+use crate::writer::Writer;
 use getset::{CopyGetters, Getters};
 use std::io::{self, Read, Write};
 
-/// A byte buffer that implements both [`Readable`] and [`Writable`].
+/// A byte buffer that implements both [`Reader`] and [`Writer`].
 ///
 /// Backed by a `Vec<u8>` with explicit position and limit tracking, mirroring
 /// Java's `ByteBuffer` position/limit semantics. All fields are private;
@@ -138,7 +138,7 @@ impl Write for ByteBufferAccessor {
     }
 }
 
-impl Readable for ByteBufferAccessor {
+impl Reader for ByteBufferAccessor {
     fn read_byte(&mut self) -> io::Result<u8> {
         if self.position + 1 > self.limit {
             return Err(io::Error::new(
@@ -267,7 +267,7 @@ impl Readable for ByteBufferAccessor {
     }
 
     fn read_byte_buffer(&mut self, len: usize) -> io::Result<Vec<u8>> {
-        Readable::read_array(self, len)
+        Reader::read_array(self, len)
     }
 
     fn remaining(&self) -> usize {
@@ -279,7 +279,7 @@ impl Readable for ByteBufferAccessor {
     }
 }
 
-impl Writable for ByteBufferAccessor {
+impl Writer for ByteBufferAccessor {
     fn write_byte(&mut self, val: u8) {
         self.ensure_capacity(1);
         self.buf[self.position] = val;

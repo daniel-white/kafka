@@ -1,10 +1,10 @@
 //! Protocol type definitions, mirroring `clients/src/main/java/org/apache/kafka/common/protocol/types/Type.java`.
 //!
-//! Each variant knows how to read/write/compute-size on any `Readable`/`Writable`
+//! Each variant knows how to read/write/compute-size on any `Reader`/`Writer`
 //! via generic parameter dispatch (no `dyn Trait`), per the no-virtual-dispatch rule.
 
-use crate::readable::Readable;
-use crate::writable::Writable;
+use crate::reader::Reader;
+use crate::writer::Writer;
 use kafka_common::uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,47 +86,47 @@ impl Type {
         self.array_element_type().is_some()
     }
 
-    pub fn read_bool<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<bool> {
+    pub fn read_bool<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<bool> {
         Ok(r.read_byte()? != 0)
     }
 
-    pub fn read_int8<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i8> {
+    pub fn read_int8<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i8> {
         Ok(r.read_byte()? as i8)
     }
 
-    pub fn read_int16<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i16> {
+    pub fn read_int16<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i16> {
         Ok(r.read_short()?)
     }
 
-    pub fn read_uint16<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<u16> {
+    pub fn read_uint16<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<u16> {
         let v = r.read_short()?;
         Ok(v as u16)
     }
 
-    pub fn read_int32<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i32> {
+    pub fn read_int32<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i32> {
         Ok(r.read_int()?)
     }
 
-    pub fn read_uint32<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<u32> {
+    pub fn read_uint32<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<u32> {
         let v = r.read_int()?;
         Ok(v as u32)
     }
 
-    pub fn read_int64<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i64> {
+    pub fn read_int64<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i64> {
         Ok(r.read_long()?)
     }
 
-    pub fn read_float64<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<f64> {
+    pub fn read_float64<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<f64> {
         Ok(r.read_double()?)
     }
 
-    pub fn read_uuid<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Uuid> {
+    pub fn read_uuid<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Uuid> {
         let most = r.read_long()?;
         let least = r.read_long()?;
         Ok(Uuid::new(most, least))
     }
 
-    pub fn read_string<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<String> {
+    pub fn read_string<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<String> {
         let len = r.read_short()?;
         if len < 0 {
             return Err(kafka_errors::KafkaError::InvalidRecord {
@@ -136,7 +136,7 @@ impl Type {
         Ok(r.read_string(len as usize)?)
     }
 
-    pub fn read_compact_string<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<String> {
+    pub fn read_compact_string<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<String> {
         let len = r.read_unsigned_varint()?;
         if len == 0 {
             return Err(kafka_errors::KafkaError::InvalidRecord {
@@ -147,7 +147,7 @@ impl Type {
         Ok(r.read_string(actual_len)?)
     }
 
-    pub fn read_nullable_string<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Option<String>> {
+    pub fn read_nullable_string<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<String>> {
         let len = r.read_short()?;
         if len < 0 {
             return Ok(None);
@@ -155,7 +155,7 @@ impl Type {
         Ok(Some(r.read_string(len as usize)?))
     }
 
-    pub fn read_compact_nullable_string<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Option<String>> {
+    pub fn read_compact_nullable_string<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<String>> {
         let len = r.read_unsigned_varint()?;
         if len == 0 {
             return Ok(None);
@@ -164,7 +164,7 @@ impl Type {
         Ok(Some(r.read_string(actual_len)?))
     }
 
-    pub fn read_bytes<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Vec<u8>> {
+    pub fn read_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Vec<u8>> {
         let size = r.read_int()?;
         if size < 0 {
             return Err(kafka_errors::KafkaError::InvalidRecord {
@@ -174,7 +174,7 @@ impl Type {
         Ok(r.read_array(size as usize)?)
     }
 
-    pub fn read_compact_bytes<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Vec<u8>> {
+    pub fn read_compact_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Vec<u8>> {
         let size = r.read_unsigned_varint()?;
         if size == 0 {
             return Err(kafka_errors::KafkaError::InvalidRecord {
@@ -185,7 +185,7 @@ impl Type {
         Ok(r.read_array(actual_size)?)
     }
 
-    pub fn read_nullable_bytes<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
+    pub fn read_nullable_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
         let size = r.read_int()?;
         if size < 0 {
             return Ok(None);
@@ -193,7 +193,7 @@ impl Type {
         Ok(Some(r.read_array(size as usize)?))
     }
 
-    pub fn read_compact_nullable_bytes<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
+    pub fn read_compact_nullable_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
         let size = r.read_unsigned_varint()?;
         if size == 0 {
             return Ok(None);
@@ -202,52 +202,52 @@ impl Type {
         Ok(Some(r.read_array(actual_size)?))
     }
 
-    pub fn read_varint<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i32> {
+    pub fn read_varint<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i32> {
         Ok(r.read_varint()?)
     }
 
-    pub fn read_varlong<R: Readable>(&self, r: &mut R) -> kafka_errors::Result<i64> {
+    pub fn read_varlong<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i64> {
         Ok(r.read_varlong()?)
     }
 
-    pub fn write_bool<W: Writable>(&self, w: &mut W, val: bool) {
+    pub fn write_bool<W: Writer>(&self, w: &mut W, val: bool) {
         w.write_byte(if val { 1 } else { 0 });
     }
 
-    pub fn write_int8<W: Writable>(&self, w: &mut W, val: i8) {
+    pub fn write_int8<W: Writer>(&self, w: &mut W, val: i8) {
         w.write_byte(val as u8);
     }
 
-    pub fn write_int16<W: Writable>(&self, w: &mut W, val: i16) {
+    pub fn write_int16<W: Writer>(&self, w: &mut W, val: i16) {
         w.write_short(val);
     }
 
-    pub fn write_uint16<W: Writable>(&self, w: &mut W, val: u16) {
+    pub fn write_uint16<W: Writer>(&self, w: &mut W, val: u16) {
         w.write_unsigned_short(val);
     }
 
-    pub fn write_int32<W: Writable>(&self, w: &mut W, val: i32) {
+    pub fn write_int32<W: Writer>(&self, w: &mut W, val: i32) {
         w.write_int(val);
     }
 
-    pub fn write_uint32<W: Writable>(&self, w: &mut W, val: u32) {
+    pub fn write_uint32<W: Writer>(&self, w: &mut W, val: u32) {
         w.write_unsigned_int(val);
     }
 
-    pub fn write_int64<W: Writable>(&self, w: &mut W, val: i64) {
+    pub fn write_int64<W: Writer>(&self, w: &mut W, val: i64) {
         w.write_long(val);
     }
 
-    pub fn write_float64<W: Writable>(&self, w: &mut W, val: f64) {
+    pub fn write_float64<W: Writer>(&self, w: &mut W, val: f64) {
         w.write_double(val);
     }
 
-    pub fn write_uuid<W: Writable>(&self, w: &mut W, val: &Uuid) {
+    pub fn write_uuid<W: Writer>(&self, w: &mut W, val: &Uuid) {
         w.write_long(val.get_most_significant_bits());
         w.write_long(val.get_least_significant_bits());
     }
 
-    pub fn write_string<W: Writable>(&self, w: &mut W, val: &str) {
+    pub fn write_string<W: Writer>(&self, w: &mut W, val: &str) {
         let bytes = val.as_bytes();
         if bytes.len() > i16::MAX as usize {
             panic!("String length {} is larger than the maximum string length", bytes.len());
@@ -256,55 +256,55 @@ impl Type {
         w.write_byte_array(bytes);
     }
 
-    pub fn write_compact_string<W: Writable>(&self, w: &mut W, val: &str) {
+    pub fn write_compact_string<W: Writer>(&self, w: &mut W, val: &str) {
         let bytes = val.as_bytes();
         w.write_unsigned_varint(bytes.len() as u32 + 1);
         w.write_byte_array(bytes);
     }
 
-    pub fn write_nullable_string<W: Writable>(&self, w: &mut W, val: Option<&str>) {
+    pub fn write_nullable_string<W: Writer>(&self, w: &mut W, val: Option<&str>) {
         match val {
             None => w.write_short(-1),
             Some(s) => self.write_string(w, s),
         }
     }
 
-    pub fn write_compact_nullable_string<W: Writable>(&self, w: &mut W, val: Option<&str>) {
+    pub fn write_compact_nullable_string<W: Writer>(&self, w: &mut W, val: Option<&str>) {
         match val {
             None => w.write_unsigned_varint(0),
             Some(s) => self.write_compact_string(w, s),
         }
     }
 
-    pub fn write_bytes<W: Writable>(&self, w: &mut W, val: &[u8]) {
+    pub fn write_bytes<W: Writer>(&self, w: &mut W, val: &[u8]) {
         w.write_int(val.len() as i32);
         w.write_byte_array(val);
     }
 
-    pub fn write_compact_bytes<W: Writable>(&self, w: &mut W, val: &[u8]) {
+    pub fn write_compact_bytes<W: Writer>(&self, w: &mut W, val: &[u8]) {
         w.write_unsigned_varint(val.len() as u32 + 1);
         w.write_byte_array(val);
     }
 
-    pub fn write_nullable_bytes<W: Writable>(&self, w: &mut W, val: Option<&[u8]>) {
+    pub fn write_nullable_bytes<W: Writer>(&self, w: &mut W, val: Option<&[u8]>) {
         match val {
             None => w.write_int(-1),
             Some(b) => self.write_bytes(w, b),
         }
     }
 
-    pub fn write_compact_nullable_bytes<W: Writable>(&self, w: &mut W, val: Option<&[u8]>) {
+    pub fn write_compact_nullable_bytes<W: Writer>(&self, w: &mut W, val: Option<&[u8]>) {
         match val {
             None => w.write_unsigned_varint(0),
             Some(b) => self.write_compact_bytes(w, b),
         }
     }
 
-    pub fn write_varint<W: Writable>(&self, w: &mut W, val: i32) {
+    pub fn write_varint<W: Writer>(&self, w: &mut W, val: i32) {
         w.write_varint(val);
     }
 
-    pub fn write_varlong<W: Writable>(&self, w: &mut W, val: i64) {
+    pub fn write_varlong<W: Writer>(&self, w: &mut W, val: i64) {
         w.write_varlong(val);
     }
 

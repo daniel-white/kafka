@@ -3,10 +3,9 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
-use crate::handlers::build_response_frame;
+use crate::handlers::{build_response_frame_with, RequestContext};
 use crate::server_state::ServerState;
 use kafka_protocol::metadata_response::{MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
-use kafka_protocol::{MessageContext, Writable};
 
 /// Handle a Metadata request: return brokers list and topic metadata.
 ///
@@ -14,7 +13,7 @@ use kafka_protocol::{MessageContext, Writable};
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
-pub fn handle_metadata(correlation_id: i32, state: &ServerState, api_version: i16, is_flexible: bool) -> Vec<u8> {
+pub fn handle_metadata(ctx: RequestContext, state: &ServerState) -> Vec<u8> {
     // Get the broker's advertised endpoint from server state
     let (broker_host, broker_port) = state.get_broker_endpoint();
     let brokers = vec![kafka_protocol::metadata_response::MetadataResponseBroker::new(
@@ -25,17 +24,17 @@ pub fn handle_metadata(correlation_id: i32, state: &ServerState, api_version: i1
     )];
 
     let mut topics = Vec::new();
-    for topic in state.topics.values() {
-        let partitions: Vec<MetadataResponsePartition> = topic
+    for (name, metadata) in state.topics.iter() {
+        let partitions: Vec<MetadataResponsePartition> = metadata
             .partitions
             .iter()
             .map(|p| MetadataResponsePartition::new(p.partition_index))
             .collect();
 
         topics.push(MetadataResponseTopic::new(
-            topic.name.clone(),
+            name.clone(),
             0, // error_code = NO_ERROR
-            topic.is_internal,
+            metadata.is_internal,
             partitions,
         ));
     }
@@ -50,9 +49,5 @@ pub fn handle_metadata(correlation_id: i32, state: &ServerState, api_version: i1
         0,  // error_code = NO_ERROR
     );
 
-    let ctx = MessageContext::new(api_version, is_flexible);
-    let mut body = Vec::with_capacity(response.body_size(&ctx));
-    response.write(&mut body, &ctx);
-
-    build_response_frame(correlation_id, is_flexible, body)
+    build_response_frame_with(ctx, response, None)
 }

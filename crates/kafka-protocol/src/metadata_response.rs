@@ -14,38 +14,11 @@
 //!
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
-use crate::byte_utils;
 use crate::reader::Reader;
 use crate::writer::Writer;
 use crate::errors::ProtocolError;
 use crate::{MessageContext, Readable, Writable};
 use getset::{CopyGetters, Getters};
-
-// ── Size helpers (free functions, since trait associated functions need a concrete type) ──
-
-fn string_size(s: &str) -> usize {
-    2 + s.len()
-}
-
-fn compact_string_size(s: &str) -> usize {
-    byte_utils::size_of_unsigned_varint(s.len() as u32 + 1) + s.len()
-}
-
-fn nullable_string_size(s: Option<&str>) -> usize {
-    match s {
-        Some(s) => string_size(s),
-        None => 2,
-    }
-}
-
-fn compact_nullable_string_size(s: Option<&str>) -> usize {
-    match s {
-        Some(s) => compact_string_size(s),
-        None => 1,
-    }
-}
-
-// byte_utils::array_count_size is now imported from byte_utils
 
 // ── Broker ───────────────────────────────────────────────────────────────
 
@@ -98,32 +71,6 @@ impl Writable for MetadataResponseBroker {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 4; // node_id: INT32
-        // host
-        size += if flexible {
-            compact_string_size(&self.host)
-        } else {
-            string_size(&self.host)
-        };
-        size += 4; // port: INT32
-        // rack (v1+)
-        if ctx.api_version() >= 1 {
-            size += match (&self.rack, flexible) {
-                (Some(r), true) => compact_nullable_string_size(Some(r)),
-                (Some(r), false) => nullable_string_size(Some(r)),
-                (None, true) => 1,
-                (None, false) => 2,
-            };
-        }
-        // tagged_fields
-        if flexible {
-            size += 1;
-        }
-        size
     }
 }
 
@@ -205,29 +152,6 @@ impl Writable for MetadataResponsePartition {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 2; // error_code: INT16
-        size += 4; // partition_index: INT32
-        size += 4; // leader_id: INT32
-        if ctx.api_version() >= 7 {
-            size += 4; // leader_epoch: INT32
-        }
-        // replica_nodes
-        size += byte_utils::array_count_size(1, flexible) + 4; // count + node_id
-        // isr_nodes
-        size += byte_utils::array_count_size(1, flexible) + 4;
-        // offline_replicas (v5+)
-        if ctx.api_version() >= 5 {
-            size += byte_utils::array_count_size(0, flexible);
-        }
-        // tagged_fields
-        if flexible {
-            size += 1;
-        }
-        size
     }
 }
 
@@ -334,39 +258,6 @@ impl Writable for MetadataResponseTopic {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 2; // error_code: INT16
-        // name
-        size += if flexible {
-            compact_string_size(&self.name)
-        } else {
-            string_size(&self.name)
-        };
-        // topic_id: UUID (v10+)
-        if ctx.api_version() >= 10 {
-            size += 16;
-        }
-        // is_internal: BOOLEAN (v1+)
-        if ctx.api_version() >= 1 {
-            size += 1;
-        }
-        // partitions array
-        size += byte_utils::array_count_size(self.partitions.len(), flexible);
-        for partition in &self.partitions {
-            size += partition.body_size(ctx);
-        }
-        // topic_authorized_operations (v8+)
-        if ctx.api_version() >= 8 {
-            size += 4;
-        }
-        // tagged_fields
-        if flexible {
-            size += 1;
-        }
-        size
     }
 }
 
@@ -499,51 +390,6 @@ impl Writable for MetadataResponse {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 0;
-
-        if ctx.api_version() >= 3 {
-            size += 4; // ThrottleTimeMs
-        }
-        // Brokers
-        size += byte_utils::array_count_size(self.brokers.len(), flexible);
-        for broker in &self.brokers {
-            size += broker.body_size(ctx);
-        }
-        // ClusterId (v2+)
-        if ctx.api_version() >= 2 {
-            size += match (&self.cluster_id, flexible) {
-                (Some(c), true) => compact_nullable_string_size(Some(c)),
-                (Some(c), false) => nullable_string_size(Some(c)),
-                (None, true) => 1,
-                (None, false) => 2,
-            };
-        }
-        // ControllerId (v1+)
-        if ctx.api_version() >= 1 {
-            size += 4;
-        }
-        // Topics
-        size += byte_utils::array_count_size(self.topics.len(), flexible);
-        for topic in &self.topics {
-            size += topic.body_size(ctx);
-        }
-        // ClusterAuthorizedOperations (v8-10)
-        if (8..=10).contains(&ctx.api_version()) {
-            size += 4;
-        }
-        // ErrorCode (v13+)
-        if ctx.api_version() >= 13 {
-            size += 2;
-        }
-        // Top-level tagged_fields
-        if flexible {
-            size += 1;
-        }
-        size
     }
 }
 

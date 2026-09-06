@@ -7,29 +7,10 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 
-use crate::byte_utils;
 use crate::reader::Reader;
 use crate::writer::Writer;
 use crate::errors::ProtocolError;
 use crate::{MessageContext, Readable, Writable};
-
-// ── Size helpers ───────────────────────────────────────────────────────────
-
-fn compact_string_size(s: &str) -> usize {
-    byte_utils::size_of_unsigned_varint(s.len() as u32 + 1) + s.len()
-}
-
-fn string_size(s: &str) -> usize {
-    2 + s.len()
-}
-
-fn array_count_size(count: usize, flexible: bool) -> usize {
-    if flexible {
-        byte_utils::size_of_unsigned_varint(count as u32 + 1)
-    } else {
-        4
-    }
-}
 
 // ── Partition Produce Response ─────────────────────────────────────────────
 
@@ -119,49 +100,6 @@ impl Writable for PartitionProduceResponse {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 4; // index: INT32
-        size += 2; // error_code: INT16
-        size += 8; // base_offset: INT64
-        if ctx.api_version() >= 2 {
-            size += 8; // log_append_time_ms: INT64
-        }
-        if ctx.api_version() >= 5 {
-            size += 8; // log_start_offset: INT64
-        }
-        if ctx.api_version() >= 8 {
-            // RecordErrors
-            size += array_count_size(self.record_errors.len(), flexible);
-            for err in &self.record_errors {
-                size += 4; // batch_index
-                size += if flexible {
-                    match &err.batch_index_error_message {
-                        Some(s) => compact_string_size(s),
-                        None => 1,
-                    }
-                } else {
-                    match &err.batch_index_error_message {
-                        Some(s) => string_size(s),
-                        None => 2,
-                    }
-                };
-                if flexible {
-                    size += 1; // tagged_fields
-                }
-            }
-            // ErrorMessage
-            size += match &self.error_message {
-                Some(s) => if flexible { compact_string_size(s) } else { string_size(s) },
-                None => if flexible { 1 } else { 2 },
-            };
-        }
-        if flexible {
-            size += 1; // tagged_fields
-        }
-        size
     }
 }
 
@@ -272,31 +210,6 @@ impl Writable for TopicProduceResponse {
             w.write_empty_tagged_fields();
         }
     }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 0;
-        // Name (v0-12) or TopicId (v13+)
-        if ctx.api_version() < 13 {
-            size += if flexible {
-                compact_string_size(&self.name)
-            } else {
-                string_size(&self.name)
-            };
-        } else {
-            size += 16; // UUID (v13+)
-        }
-        // PartitionResponses array
-        size += array_count_size(self.partitions.len(), flexible);
-        for partition in &self.partitions {
-            size += partition.body_size(ctx);
-        }
-        // tagged_fields (flexible)
-        if flexible {
-            size += 1;
-        }
-        size
-    }
 }
 
 // ── Top-level ProduceResponse ──────────────────────────────────────────────
@@ -339,29 +252,6 @@ impl Writable for ProduceResponse {
         if flexible {
             w.write_empty_tagged_fields();
         }
-    }
-
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let flexible = ctx.api_version() >= 9;
-        let mut size = 0;
-        // Responses array
-        size += array_count_size(self.responses.len(), flexible);
-        for topic in &self.responses {
-            size += topic.body_size(ctx);
-        }
-        // ThrottleTimeMs (v6+)
-        if ctx.api_version() >= 6 {
-            size += 4;
-        }
-        // ErrorCode (v13+)
-        if ctx.api_version() >= 13 {
-            size += 2;
-        }
-        // tagged_fields (flexible)
-        if flexible {
-            size += 1;
-        }
-        size
     }
 }
 

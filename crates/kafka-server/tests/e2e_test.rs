@@ -89,6 +89,9 @@ async fn test_e2e_api_versions_request() {
     let error_code = i16::from_be_bytes(response[8..10].try_into().unwrap());
     assert_eq!(error_code, 0, "Expected error_code=0 (NO_ERROR), got {}", error_code);
 
+    eprintln!("Full response bytes: {:?}", &response[..n]);
+    eprintln!("Byte at offset 8: {}", response[8]);
+
     // The compact array count should be 6 (5 entries + 1)
     assert_eq!(response[10], 6, "Expected COMPACT_ARRAY count of 6 (5 entries + 1), got {}", response[10]);
 

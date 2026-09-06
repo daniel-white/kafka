@@ -186,17 +186,3 @@ pub fn read_double<R: Read>(r: &mut R) -> io::Result<f64> {
 pub fn write_double<W: Write>(value: f64, w: &mut W) -> io::Result<()> {
     w.write_all(&value.to_be_bytes())
 }
-
-/// Number of bytes needed to encode an array count.
-///
-/// For flexible versions: unsigned varint of (count + 1).
-/// For non-flexible versions: fixed 4 bytes (INT32).
-///
-/// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/utils/internals/ByteUtils.java
-pub fn array_count_size(count: usize, flexible: bool) -> usize {
-    if flexible {
-        size_of_unsigned_varint(count as u32 + 1)
-    } else {
-        4
-    }
-}

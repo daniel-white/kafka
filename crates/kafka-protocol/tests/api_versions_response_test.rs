@@ -2,14 +2,14 @@
 
 use kafka_protocol::api_versions_response::{ApiVersionEntry, ApiVersionsResponse};
 use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::{MessageContext, Readable, Writable};
+use kafka_protocol::{message_body_size, MessageContext, Readable, Writable};
 
 fn write_and_read(response: &ApiVersionsResponse, api_version: i16, flexible: bool) -> ApiVersionsResponse {
     let ctx = MessageContext::new(api_version, flexible);
 
     let mut buf = Vec::new();
     Writable::write(response, &mut buf, &ctx);
-    assert_eq!(response.body_size(&ctx), buf.len());
+    assert_eq!(buf.len(), message_body_size(response, &ctx));
 
     let mut reader = ByteBufferAccessor::from_bytes(buf);
     Readable::read::<ByteBufferAccessor>(&mut reader, &ctx).unwrap()
@@ -82,10 +82,10 @@ fn test_api_version_entry_sizes() {
     let entry = ApiVersionEntry::new(3, 0, 13);
 
     let ctx_v0 = MessageContext::new(0, false);
-    assert_eq!(entry.body_size(&ctx_v0), 6);
+    assert_eq!(message_body_size(&entry, &ctx_v0), 6);
 
     let ctx_v3 = MessageContext::new(3, false);
-    assert_eq!(entry.body_size(&ctx_v3), 7);
+    assert_eq!(message_body_size(&entry, &ctx_v3), 7);
 }
 
 #[test]

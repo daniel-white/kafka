@@ -22,7 +22,7 @@ pub mod types;
 pub mod writer;
 
 pub use api_key::ApiKey;
-pub use message::{Readable, Writable};
+pub use message::{message_body_size, Readable, Writable};
 pub use message_context::{HeaderContext, MessageContext};
 pub use metadata_response::{MetadataResponse, MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic};
 pub use produce_response::{PartitionProduceResponse, ProduceResponse, TopicProduceResponse};

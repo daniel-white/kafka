@@ -8,17 +8,25 @@
 //! The `MessageContext` carries the API version and header flexibility, allowing
 //! each field to be conditionally serialized based on its `versions` annotation.
 //!
-//! The `body_size()` method has a default implementation that writes to a
-//! `SizeCounter` (which implements `Writer` but doesn't store data), so most
-//! messages only need to implement `write()`. Individual fields determine
-//! their own flexibility from `ctx.api_version()` against the message's
-//! `flexibleVersions` threshold from the JSON spec.
+//! To compute the size of a message body, use `SizeCounter` (which implements `Writer`
+//! but doesn't store data): create one, call `write()` on it, then read `size()`.
 //!
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/ApiMessage.java
 
 use crate::reader::Reader;
 use crate::writer::{SizeCounter, Writer};
 use crate::MessageContext;
+
+/// Compute the serialized body size of a `Writable` message by writing to a
+/// `SizeCounter` (which counts bytes without storing them).
+///
+/// This is the standard way to get a message's body size without duplicating
+/// the field-counting logic.
+pub fn message_body_size(msg: &impl Writable, ctx: &MessageContext) -> usize {
+    let mut counter = SizeCounter::new();
+    msg.write(&mut counter, ctx);
+    counter.size()
+}
 
 /// Trait for writing a protocol message to a byte sink.
 ///
@@ -37,17 +45,6 @@ pub trait Writable {
     /// `ctx.api_version()` determines which fields are present and whether
     /// flexible (compact) encoding is used.
     fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext);
-
-    /// Compute the encoded size of the message body.
-    ///
-    /// Default implementation writes to a `SizeCounter` and returns the
-    /// total bytes counted. Override only if you need optimized size
-    /// computation that avoids a full write.
-    fn body_size(&self, ctx: &MessageContext) -> usize {
-        let mut counter = SizeCounter::new();
-        self.write(&mut counter, ctx);
-        counter.size()
-    }
 }
 
 /// Trait for reading a protocol message from a byte source.

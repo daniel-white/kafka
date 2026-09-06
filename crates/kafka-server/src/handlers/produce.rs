@@ -5,14 +5,13 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 //!   core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
 
-use crate::handlers::build_response_frame;
+use crate::handlers::{build_response_frame_with, RequestContext};
 use crate::server_state::ServerState;
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
 use kafka_protocol::produce_response::{
     PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
 };
-use kafka_protocol::{MessageContext, Writable};
 
 /// Parsed Produce request details for one topic-partition.
 ///
@@ -165,9 +164,8 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
 /// to the log, and return a Produce response with the assigned base_offset.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
-pub fn handle_produce(request: &KafkaRequest, state: &mut ServerState) -> Vec<u8> {
-    let is_flexible = request.header.flexible;
-    let api_version = request.header.api_version;
+pub fn handle_produce(request: &KafkaRequest, state: &mut ServerState, ctx: RequestContext) -> Vec<u8> {
+    let api_version = ctx.api_version;
     let body_is_flexible = api_version >= 9;
     let parts = parse_produce_partitions(&request.body, body_is_flexible);
 
@@ -184,22 +182,14 @@ pub fn handle_produce(request: &KafkaRequest, state: &mut ServerState) -> Vec<u8
         base_offsets.push(base_offset);
     }
 
-    build_produce_response(
-        request.header.correlation_id,
-        is_flexible,
-        api_version,
-        &parts,
-        &base_offsets,
-    )
+    build_produce_response(ctx, &parts, &base_offsets)
 }
 
 /// Build a Produce response using the trait-based ProduceResponse struct.
 ///
 /// MIGRATION_SOURCE: clients/.../ProduceResponse.java
 fn build_produce_response(
-    correlation_id: i32,
-    is_flexible: bool,
-    api_version: i16,
+    ctx: RequestContext,
     parts: &[ProduceTopicPartition],
     base_offsets: &[i64],
 ) -> Vec<u8> {
@@ -226,9 +216,5 @@ fn build_produce_response(
     }
 
     let response = ProduceResponse::new(topics, 0, 0);
-    let ctx = MessageContext::new(api_version, is_flexible);
-    let mut body = Vec::new();
-    response.write(&mut body, &ctx);
-
-    build_response_frame(correlation_id, is_flexible, body)
+    build_response_frame_with(ctx, response, None)
 }

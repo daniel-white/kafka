@@ -76,7 +76,7 @@ impl PartitionProduceResponse {
 }
 
 impl Writable for PartitionProduceResponse {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // Index: INT32 (always)
         w.write_int(self.index);
@@ -163,14 +163,10 @@ impl Writable for PartitionProduceResponse {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for PartitionProduceResponse {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
         let index = r.read_int()?;
         let error_code = r.read_short()?;
@@ -251,7 +247,7 @@ impl TopicProduceResponse {
 }
 
 impl Writable for TopicProduceResponse {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // Name: STRING/COMPACT_STRING (v0-12 only, v13+ uses TopicId)
         if ctx.api_version() < 13 {
@@ -269,7 +265,7 @@ impl Writable for TopicProduceResponse {
         // PartitionResponses: ARRAY/COMPACT_ARRAY
         w.write_array_count(self.partitions.len(), flexible);
         for partition in &self.partitions {
-            partition.write_body(w, ctx);
+            partition.write(w, ctx);
         }
         // tagged_fields (flexible)
         if flexible {
@@ -301,10 +297,6 @@ impl Writable for TopicProduceResponse {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 // ── Top-level ProduceResponse ──────────────────────────────────────────────
@@ -328,12 +320,12 @@ impl ProduceResponse {
 }
 
 impl Writable for ProduceResponse {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // Responses: ARRAY/COMPACT_ARRAY
         w.write_array_count(self.responses.len(), flexible);
         for topic in &self.responses {
-            topic.write_body(w, ctx);
+            topic.write(w, ctx);
         }
         // ThrottleTimeMs: INT32 (v6+, ignorable)
         if ctx.api_version() >= 6 {
@@ -371,14 +363,10 @@ impl Writable for ProduceResponse {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for ProduceResponse {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
         let count = r.read_array_count(flexible)?;
         let mut responses = Vec::with_capacity(count);
@@ -392,7 +380,7 @@ impl Readable for ProduceResponse {
             let partition_count = r.read_array_count(flexible)?;
             let mut partitions = Vec::with_capacity(partition_count);
             for _ in 0..partition_count {
-                partitions.push(PartitionProduceResponse::read_body(r, ctx)?);
+                partitions.push(PartitionProduceResponse::read(r, ctx)?);
             }
             if flexible { r.skip_tagged_fields()?; }
             responses.push(TopicProduceResponse { name, partitions });

@@ -52,7 +52,7 @@ pub fn handle_metadata(correlation_id: i32, state: &ServerState, api_version: i1
 
     let ctx = MessageContext::new(api_version, is_flexible);
     let mut body = Vec::with_capacity(response.body_size(&ctx));
-    response.write_body(&mut body, &ctx);
+    response.write(&mut body, &ctx);
 
     build_response_frame(correlation_id, is_flexible, body)
 }

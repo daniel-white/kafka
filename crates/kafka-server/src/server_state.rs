@@ -6,12 +6,63 @@
 //! MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaServer.scala
 
 use kafka_common::Uuid;
+use kafka_protocol::api_key::ApiKey;
 use std::collections::HashMap;
+
+/// Registry of supported APIs and their version ranges.
+///
+/// This replaces the hardcoded API version list in `handle_api_versions`.
+/// The registry is populated at startup with the APIs the broker actually
+/// supports, and `ApiVersionsResponse` is generated from it.
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/protocol/ApiKeys.java
+#[derive(Debug, Clone, Default)]
+pub struct ApiRegistry {
+    /// (api_key, min_version, max_version) for each supported API.
+    entries: Vec<(i16, i16, i16)>,
+}
+
+impl ApiRegistry {
+    pub fn new() -> Self {
+        ApiRegistry {
+            entries: Vec::new(),
+        }
+    }
+
+    /// Register an API with its version range.
+    pub fn register(&mut self, api_key: i16, min_version: i16, max_version: i16) {
+        self.entries.push((api_key, min_version, max_version));
+    }
+
+    /// Add an API key using its enum's built-in min/max versions.
+    pub fn register_api(&mut self, key: ApiKey) {
+        self.register(key.id(), key.min_version(), key.max_version());
+    }
+
+    /// Get all registered entries.
+    pub fn entries(&self) -> &[(i16, i16, i16)] {
+        &self.entries
+    }
+
+    /// Build the default set of APIs supported by this minimal broker.
+    ///
+    /// Only includes APIs that have actual handlers in this broker.
+    pub fn default_broker_apis() -> Self {
+        let mut registry = ApiRegistry::new();
+        registry.register(0, 3, 13); // Produce
+        registry.register(1, 0, 16); // Fetch
+        registry.register(2, 0, 5);  // ListOffsets
+        registry.register(3, 0, 13); // Metadata
+        registry.register(18, 0, 5); // ApiVersions
+        registry
+    }
+}
 
 /// Broker-level state: topic metadata, partition state, and log segments.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaServer.scala
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ServerState {
     /// All known topics, keyed by topic name.
     pub topics: HashMap<String, TopicMetadata>,
@@ -23,6 +74,8 @@ pub struct ServerState {
     pub offsets: HashMap<(String, i32), i64>,
     /// The broker's advertised endpoint (host, port) for Metadata responses.
     pub broker_endpoint: Option<(String, i32)>,
+    /// Registry of supported APIs for ApiVersions responses.
+    pub api_registry: ApiRegistry,
 }
 
 /// Topic metadata including state.
@@ -62,7 +115,13 @@ impl ServerState {
             logs: HashMap::new(),
             offsets: HashMap::new(),
             broker_endpoint: None,
+            api_registry: ApiRegistry::default_broker_apis(),
         }
+    }
+
+    /// Get the API registry for ApiVersions responses.
+    pub fn api_registry(&self) -> &ApiRegistry {
+        &self.api_registry
     }
 
     /// Register a topic with the given name and number of partitions.

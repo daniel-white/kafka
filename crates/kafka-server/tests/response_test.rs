@@ -10,7 +10,7 @@ fn make_request(api_key: i16, api_version: i16, correlation_id: i32) -> KafkaReq
 }
 
 fn make_state() -> RwLock<ServerState> {
-    RwLock::new(ServerState::default())
+    RwLock::new(ServerState::new())
 }
 
 fn extract_correlation_id(response: &[u8]) -> i32 {

@@ -45,13 +45,7 @@ fn compact_nullable_string_size(s: Option<&str>) -> usize {
     }
 }
 
-fn array_count_size(count: usize, flexible: bool) -> usize {
-    if flexible {
-        byte_utils::size_of_unsigned_varint(count as u32 + 1)
-    } else {
-        4
-    }
-}
+// byte_utils::array_count_size is now imported from byte_utils
 
 // ── Broker ───────────────────────────────────────────────────────────────
 
@@ -80,7 +74,7 @@ impl MetadataResponseBroker {
 }
 
 impl Writable for MetadataResponseBroker {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // node_id: INT32 (always)
         w.write_int(self.node_id);
@@ -131,14 +125,10 @@ impl Writable for MetadataResponseBroker {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for MetadataResponseBroker {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
         // node_id: INT32
         let node_id = r.read_int()?;
@@ -189,7 +179,7 @@ impl MetadataResponsePartition {
 }
 
 impl Writable for MetadataResponsePartition {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // error_code: INT16
         w.write_short(0); // NO_ERROR
@@ -226,12 +216,12 @@ impl Writable for MetadataResponsePartition {
             size += 4; // leader_epoch: INT32
         }
         // replica_nodes
-        size += array_count_size(1, flexible) + 4; // count + node_id
+        size += byte_utils::array_count_size(1, flexible) + 4; // count + node_id
         // isr_nodes
-        size += array_count_size(1, flexible) + 4;
+        size += byte_utils::array_count_size(1, flexible) + 4;
         // offline_replicas (v5+)
         if ctx.api_version() >= 5 {
-            size += array_count_size(0, flexible);
+            size += byte_utils::array_count_size(0, flexible);
         }
         // tagged_fields
         if flexible {
@@ -239,14 +229,10 @@ impl Writable for MetadataResponsePartition {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for MetadataResponsePartition {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
         // error_code: INT16
         let _error_code = r.read_short()?;
@@ -315,7 +301,7 @@ impl MetadataResponseTopic {
 }
 
 impl Writable for MetadataResponseTopic {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
         // error_code: INT16
         w.write_short(self.error_code);
@@ -338,7 +324,7 @@ impl Writable for MetadataResponseTopic {
         // partitions: ARRAY/COMPACT_ARRAY
         w.write_array_count(self.partitions.len(), flexible);
         for partition in &self.partitions {
-            partition.write_body(w, ctx);
+            partition.write(w, ctx);
         }
         // topic_authorized_operations: INT32 (v8+, ignorable)
         if ctx.api_version() >= 8 {
@@ -368,7 +354,7 @@ impl Writable for MetadataResponseTopic {
             size += 1;
         }
         // partitions array
-        size += array_count_size(self.partitions.len(), flexible);
+        size += byte_utils::array_count_size(self.partitions.len(), flexible);
         for partition in &self.partitions {
             size += partition.body_size(ctx);
         }
@@ -382,14 +368,10 @@ impl Writable for MetadataResponseTopic {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for MetadataResponseTopic {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
         // error_code: INT16
         let error_code = r.read_short()?;
@@ -413,7 +395,7 @@ impl Readable for MetadataResponseTopic {
         let partition_count = r.read_array_count(flexible)?;
         let mut partitions = Vec::with_capacity(partition_count);
         for _ in 0..partition_count {
-            partitions.push(MetadataResponsePartition::read_body(r, ctx)?);
+            partitions.push(MetadataResponsePartition::read(r, ctx)?);
         }
         // topic_authorized_operations (v8+)
         if ctx.api_version() >= 8 {
@@ -476,7 +458,7 @@ impl MetadataResponse {
 }
 
 impl Writable for MetadataResponse {
-    fn write_body<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
         let flexible = ctx.api_version() >= 9;
 
         // ThrottleTimeMs: INT32 (v3+, ignorable)
@@ -486,7 +468,7 @@ impl Writable for MetadataResponse {
         // Brokers: ARRAY/COMPACT_ARRAY
         w.write_array_count(self.brokers.len(), flexible);
         for broker in &self.brokers {
-            broker.write_body(w, ctx);
+            broker.write(w, ctx);
         }
         // ClusterId: STRING/COMPACT_NULLABLE_STRING (v2+, nullable)
         if ctx.api_version() >= 2 {
@@ -503,7 +485,7 @@ impl Writable for MetadataResponse {
         // Topics: ARRAY/COMPACT_ARRAY
         w.write_array_count(self.topics.len(), flexible);
         for topic in &self.topics {
-            topic.write_body(w, ctx);
+            topic.write(w, ctx);
         }
         // ClusterAuthorizedOperations: INT32 (v8-10 only, NOT v11+)
         if (8..=10).contains(&ctx.api_version()) {
@@ -527,7 +509,7 @@ impl Writable for MetadataResponse {
             size += 4; // ThrottleTimeMs
         }
         // Brokers
-        size += array_count_size(self.brokers.len(), flexible);
+        size += byte_utils::array_count_size(self.brokers.len(), flexible);
         for broker in &self.brokers {
             size += broker.body_size(ctx);
         }
@@ -545,7 +527,7 @@ impl Writable for MetadataResponse {
             size += 4;
         }
         // Topics
-        size += array_count_size(self.topics.len(), flexible);
+        size += byte_utils::array_count_size(self.topics.len(), flexible);
         for topic in &self.topics {
             size += topic.body_size(ctx);
         }
@@ -563,14 +545,10 @@ impl Writable for MetadataResponse {
         }
         size
     }
-
-    fn is_flexible_body(&self, ctx: &MessageContext) -> bool {
-        ctx.api_version() >= 9
-    }
 }
 
 impl Readable for MetadataResponse {
-    fn read_body<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let flexible = ctx.api_version() >= 9;
 
         // ThrottleTimeMs: INT32 (v3+)
@@ -583,7 +561,7 @@ impl Readable for MetadataResponse {
         let broker_count = r.read_array_count(flexible)?;
         let mut brokers = Vec::with_capacity(broker_count);
         for _ in 0..broker_count {
-            brokers.push(MetadataResponseBroker::read_body(r, ctx)?);
+            brokers.push(MetadataResponseBroker::read(r, ctx)?);
         }
         // ClusterId (v2+)
         let cluster_id = if ctx.api_version() >= 2 {
@@ -605,7 +583,7 @@ impl Readable for MetadataResponse {
         let topic_count = r.read_array_count(flexible)?;
         let mut topics = Vec::with_capacity(topic_count);
         for _ in 0..topic_count {
-            topics.push(MetadataResponseTopic::read_body(r, ctx)?);
+            topics.push(MetadataResponseTopic::read(r, ctx)?);
         }
         // ClusterAuthorizedOperations (v8-10)
         let cluster_authorized_operations = if (8..=10).contains(&ctx.api_version()) {

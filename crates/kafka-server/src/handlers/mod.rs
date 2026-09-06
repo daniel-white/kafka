@@ -82,7 +82,10 @@ pub fn dispatch(
     );
 
     match api_key {
-        ApiKey::ApiVersions => handle_api_versions(request.header.correlation_id, api_version, is_flexible),
+        ApiKey::ApiVersions => {
+            let state = state.read().unwrap();
+            handle_api_versions(&state, request.header.correlation_id, api_version)
+        }
         ApiKey::DescribeTopicPartitions => {
             let state = state.read().unwrap();
             handle_describe_topics(request.header.correlation_id, &state, api_version, is_flexible)

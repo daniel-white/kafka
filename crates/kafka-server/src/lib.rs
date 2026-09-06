@@ -38,7 +38,7 @@ impl KafkaServer {
     pub fn new() -> Self {
         KafkaServer {
             status: Arc::new(AtomicU8::new(ProcessStatus::Shutdown as u8)),
-            state: Arc::new(RwLock::new(ServerState::default())),
+            state: Arc::new(RwLock::new(ServerState::new())),
         }
     }
 

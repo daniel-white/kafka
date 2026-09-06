@@ -228,7 +228,7 @@ fn build_produce_response(
     let response = ProduceResponse::new(topics, 0, 0);
     let ctx = MessageContext::new(api_version, is_flexible);
     let mut body = Vec::new();
-    response.write_body(&mut body, &ctx);
+    response.write(&mut body, &ctx);
 
     build_response_frame(correlation_id, is_flexible, body)
 }

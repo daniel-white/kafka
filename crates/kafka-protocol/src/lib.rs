@@ -7,6 +7,7 @@
 #![deny(clippy::ptr_arg)]
 
 pub mod api_key;
+pub mod api_versions_response;
 pub mod byte_buffer_accessor;
 pub mod byte_utils;
 pub mod errors;
@@ -29,3 +30,4 @@ pub use reader::Reader;
 pub use kafka_common::uuid;
 pub use raw_tagged_field::RawTaggedField;
 pub use writer::{SizeCounter, Writer};
+pub use api_versions_response::{ApiVersionsResponse, ApiVersionEntry};

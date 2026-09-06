@@ -13,6 +13,10 @@ uuid = { version = "1.0", features = ["v4"] }
 kafka-common = { path = "../kafka-common" }
 kafka-errors = { path = "../kafka-errors" }
 
+[build-dependencies]
+serde_json = "1.0"
+json_comments = "0.2"
+
 [lints.rust]
 unsafe_code = "deny"
 

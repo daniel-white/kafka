@@ -25,9 +25,9 @@ fn test_full_request_response_pipeline() {
     assert_eq!(size, serialized.len() - 4);
 
     let mut data_slice = &serialized[4..];
-    let decoded_header = RequestHeader::read(&mut data_slice).unwrap();
+    let (decoded_header, remaining) = RequestHeader::read(data_slice).unwrap();
     assert_eq!(decoded_header, header);
-    assert_eq!(data_slice, &[0x00, 0x01, 0x02, 0x03]);
+    assert_eq!(remaining, &[0x00, 0x01, 0x02, 0x03]);
 }
 
 #[test]

@@ -6,14 +6,15 @@
 
 use kafka_server_common::ProcessStatus;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+pub mod handlers;
 pub mod request_handler;
 pub mod server_state;
 pub mod socket_server;
 
-pub use request_handler::dispatch as dispatch_request;
+pub use handlers::{build_empty_response, build_response_frame, dispatch};
 pub use server_state::{ServerPartition, ServerState, TopicMetadata};
 pub use socket_server::{KafkaConnection, SocketServer};
 
@@ -27,7 +28,7 @@ pub struct KafkaServer {
     /// Process lifecycle status.
     status: Arc<AtomicU8>,
     /// Broker-level state (topics, partitions).
-    state: Arc<ServerState>,
+    state: Arc<RwLock<ServerState>>,
 }
 
 impl KafkaServer {
@@ -37,7 +38,7 @@ impl KafkaServer {
     pub fn new() -> Self {
         KafkaServer {
             status: Arc::new(AtomicU8::new(ProcessStatus::Shutdown as u8)),
-            state: Arc::new(ServerState::default()),
+            state: Arc::new(RwLock::new(ServerState::default())),
         }
     }
 
@@ -85,7 +86,7 @@ impl KafkaServer {
     /// Get a reference to the server's broker-level state.
     ///
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
-    pub fn state(&self) -> &Arc<ServerState> {
+    pub fn state(&self) -> &Arc<RwLock<ServerState>> {
         &self.state
     }
 }

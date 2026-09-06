@@ -158,8 +158,7 @@ fn test_request_header_write_read() {
     assert_eq!(&buf[10..19], b"my-client");
 
     // Round-trip
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, slice) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded, header);
     assert!(slice.is_empty());
 }
@@ -170,10 +169,10 @@ fn test_request_header_empty_client_id() {
     let mut buf = Vec::new();
     header.write(&mut buf);
 
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, slice) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded, header);
     assert_eq!(decoded.client_id, "");
+    assert!(slice.is_empty());
 }
 
 #[test]
@@ -211,8 +210,7 @@ fn test_request_header_v1() {
     assert_eq!(&buf[8..10], &0i16.to_be_bytes()); // empty clientId
 
     // Round-trip
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, slice) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded.api_key, 16);
     assert_eq!(decoded.api_version, 1);
     assert_eq!(decoded.correlation_id, 10);
@@ -234,8 +232,7 @@ fn test_request_header_parse_with_nonzero_position() {
     with_prefix.extend_from_slice(&buf);
 
     // Skip the prefix, read only the header
-    let mut slice: &[u8] = &with_prefix[3..];
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, _rest) = RequestHeader::read(&with_prefix[3..]).unwrap();
     assert_eq!(decoded.correlation_id, 123);
     assert_eq!(decoded.api_key, 10);
     assert_eq!(decoded.api_version, 0);
@@ -329,14 +326,13 @@ fn test_request_header_flexible_v2() {
     // Some placeholder body data
     buf.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
 
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, rest) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded.api_key, 18);
     assert_eq!(decoded.api_version, 3);
     assert_eq!(decoded.correlation_id, 42);
     assert_eq!(decoded.client_id, "rdkafka");
     // Should have consumed the header and left the body
-    assert_eq!(slice.len(), 4);
+    assert_eq!(rest.len(), 4);
 }
 
 #[test]
@@ -351,8 +347,7 @@ fn test_request_header_flexible_empty_client() {
     // Tagged fields: 0 entries
     buf.push(0);
 
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, slice) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded.client_id, "");
     assert!(slice.is_empty());
 }
@@ -365,8 +360,7 @@ fn test_request_header_flexible_round_trip() {
     header.write(&mut buf);
     assert_eq!(buf.len(), header.size());
 
-    let mut slice = buf.as_slice();
-    let decoded = RequestHeader::read(&mut slice).unwrap();
+    let (decoded, slice) = RequestHeader::read(buf.as_slice()).unwrap();
     assert_eq!(decoded, header);
     assert_eq!(decoded.client_id, "test-client");
     assert!(slice.is_empty());

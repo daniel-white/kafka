@@ -112,6 +112,33 @@ pub fn write_varlong<W: Write>(value: i64, w: &mut W) -> io::Result<()> {
     write_unsigned_varlong(zigzag, w)
 }
 
+/// Read an unsigned int stored in variable-length (protobuf) format from a byte slice.
+///
+/// Returns the decoded value and the number of bytes consumed.
+///
+/// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/utils/internals/ByteUtils.java
+pub fn read_unsigned_varint_from_slice(buf: &[u8]) -> Result<(u32, usize), std::io::Error> {
+    let mut result = 0u32;
+    let mut shift = 0;
+    for (i, &b) in buf.iter().enumerate() {
+        if i >= 5 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Varint is too long",
+            ));
+        }
+        result |= ((b & 0x7F) as u32) << shift;
+        if b & 0x80 == 0 {
+            return Ok((result, i + 1));
+        }
+        shift += 7;
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::UnexpectedEof,
+        "Unexpected EOF while reading varint",
+    ))
+}
+
 /// Number of bytes needed to encode an unsigned int in variable-length format.
 ///
 /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/utils/internals/ByteUtils.java

@@ -7,11 +7,13 @@
 //! - clients/src/main/java/org/apache/kafka/common/network/SocketServer.java
 
 use crate::KafkaServer;
+use crate::handlers::dispatch;
+use crate::server_state::ServerState;
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::network_receive::NetworkReceive;
 use kafka_net::request_header::RequestHeader;
 use kafka_server_common::ProcessStatus;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// A single accepted connection.
 ///
@@ -23,9 +25,6 @@ pub struct KafkaConnection {
 }
 
 impl KafkaConnection {
-    /// Create a new connection with unlimited receive size.
-    ///
-    /// MIGRATION_SOURCE: clients/.../NetworkReceive.java
     pub fn new() -> Self {
         KafkaConnection {
             receive: NetworkReceive::new(),
@@ -34,8 +33,6 @@ impl KafkaConnection {
 
     /// Feed raw bytes from the network into the receive buffer.
     ///
-    /// Returns the number of bytes consumed.
-    ///
     /// MIGRATION_SOURCE: clients/.../NetworkReceive.java
     pub fn feed(&mut self, data: &[u8]) -> Result<usize, kafka_net::errors::NetworkError> {
         self.receive.feed(data)
@@ -43,40 +40,32 @@ impl KafkaConnection {
 
     /// Attempt to parse a complete request header from the received data.
     ///
-    /// Returns the parsed header if the receive is complete.
-    ///
-    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/RequestHeader.java
+    /// MIGRATION_SOURCE: clients/.../RequestHeader.java
     pub fn try_parse_request(&self) -> Option<Result<RequestHeader, kafka_net::errors::NetworkError>> {
         if !self.receive.complete() {
             return None;
         }
-
-        let mut buf = self.receive.payload()?;
-        Some(RequestHeader::read(&mut buf))
+        let buf = self.receive.payload()?;
+        Some(RequestHeader::read(buf).map(|(header, _)| header))
     }
 
     /// Parse the received data into a full KafkaRequest (header + body).
     ///
-    /// Returns the parsed request if the receive is complete.
-    ///
-    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/clients/NetworkClient.java
+    /// MIGRATION_SOURCE: clients/.../NetworkClient.java
     pub fn parse_request(&self) -> Option<KafkaRequest> {
         if !self.receive.complete() {
             return None;
         }
-
-        let mut buf = self.receive.payload()?;
-        let header = RequestHeader::read(&mut buf).ok()?;
-        let body = buf.to_vec().into_boxed_slice();
+        let buf = self.receive.payload()?;
+        let (header, body) = RequestHeader::read(buf).ok()?;
+        let body = body.to_vec().into_boxed_slice();
         Some(KafkaRequest::new(header, body))
     }
 
-    /// Check if the receive is complete (size header + full payload read).
     pub fn is_complete(&self) -> bool {
         self.receive.complete()
     }
 
-    /// Get the raw payload bytes.
     pub fn payload(&self) -> Option<&[u8]> {
         self.receive.payload()
     }
@@ -98,26 +87,19 @@ pub struct SocketServer {
 }
 
 impl SocketServer {
-    /// Create a new socket server from a KafkaServer.
-    ///
-    /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/SocketServer.scala
     pub fn new(server: Arc<KafkaServer>) -> Self {
         SocketServer { server }
     }
 
     /// Bind a listener on the given address.
     ///
-    /// Returns the bound tokio TcpListener.
-    ///
-    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/network/SocketServer.java
+    /// MIGRATION_SOURCE: clients/.../SocketServer.java
     pub async fn bind(&self, addr: &str) -> std::io::Result<tokio::net::TcpListener> {
         assert!(self.server.status() == ProcessStatus::Started);
         tokio::net::TcpListener::bind(addr).await
     }
 
     /// Accept incoming connections in a loop, spawning a handler task per connection.
-    ///
-    /// Mirrors Java's SocketServer accept loop.
     ///
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/SocketServer.scala
     pub async fn accept_loop(&self, listener: tokio::net::TcpListener) {
@@ -140,18 +122,16 @@ impl SocketServer {
 /// Handle a single TCP connection: read bytes, parse Kafka request framing,
 /// and send a response back.
 ///
-/// Mirrors Java's SocketServer.connection handling.
-///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/SocketServer.scala
 pub async fn handle_connection(
     socket: &mut tokio::net::TcpStream,
     peer_addr: std::net::SocketAddr,
-    state: &crate::ServerState,
+    state: &Arc<RwLock<ServerState>>,
 ) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     let mut conn = KafkaConnection::new();
-    let mut buf = vec![0u8; 1024];
+    let mut buf = vec![0u8; 65536];
 
     loop {
         match socket.read(&mut buf).await {
@@ -160,21 +140,46 @@ pub async fn handle_connection(
                 break;
             }
             Ok(n) => {
-                _ = conn.feed(&buf[..n]);
-                if conn.is_complete() {
+                eprintln!("DEBUG: read {} bytes", n);
+                let mut offset = 0;
+                loop {
+                    let result = conn.feed(&buf[offset..n]);
+                    match &result {
+                        Ok(consumed) => {
+                            eprintln!("DEBUG: consumed {} bytes, complete={}", consumed, conn.is_complete());
+                            offset += consumed;
+                        }
+                        Err(e) => {
+                            eprintln!("DEBUG: feed error: {:?}", e);
+                            break;
+                        }
+                    }
+
+                    if !conn.is_complete() {
+                        break;
+                    }
+
                     if let Some(request) = conn.parse_request() {
-                        println!(
+                        eprintln!(
                             "Received request: api_key={}, api_version={}, correlation_id={}",
                             request.header.api_key,
                             request.header.api_version,
                             request.header.correlation_id
                         );
-                        let response = crate::dispatch_request(&request, state);
+                        eprintln!("DEBUG: body {} bytes: {:02x?}", request.body.len(), &request.body[0..request.body.len().min(40)]);
+                        let response = dispatch(&request, state);
+                        eprintln!("DEBUG: response {} bytes", response.len());
                         let _ = socket.write_all(&response).await;
-                        // Reset connection for next request on this stream
-                        conn = KafkaConnection::new();
-                    } else if let Some(Err(e)) = conn.try_parse_request() {
-                        eprintln!("Parse error: {}", e);
+                    } else {
+                        // Log the raw payload for debugging
+                        if let Some(payload) = conn.payload() {
+                            eprintln!("DEBUG: parse_request returned None, payload {} bytes: {:02x?}", payload.len(), &payload[..payload.len().min(40)]);
+                        }
+                    }
+
+                    conn = KafkaConnection::new();
+                    if offset >= n {
+                        break;
                     }
                 }
             }

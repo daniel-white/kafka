@@ -79,10 +79,13 @@ impl Readable for ApiVersionEntry {
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, CopyGetters, Getters)]
 pub struct ApiVersionsResponse {
+    #[get_copy = "pub"]
     error_code: i16,
+    #[get = "pub"]
     api_keys: Vec<ApiVersionEntry>,
+    #[get_copy = "pub"]
     throttle_time_ms: i32,
     // Tagged fields (v3+): SupportedFeatures, FinalizedFeaturesEpoch, etc.
     // Omitted for simplicity — brokers may not return these.

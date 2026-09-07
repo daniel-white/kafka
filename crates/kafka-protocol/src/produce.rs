@@ -8,10 +8,10 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceRequest.java
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 
-use crate::reader::Reader;
-use crate::writer::Writer;
 use crate::errors::ProtocolError;
-use crate::{MessageContext, Readable, Writable};
+use crate::io::reader::Reader;
+use crate::io::writer::{Writable, Writer};
+use crate::MessageContext;
 
 /// Produce request message.
 ///
@@ -306,3 +306,4 @@ impl Readable for ProduceResponse {
 // Re-export for convenience
 pub use PartitionProduceResponse as Partition;
 pub use TopicProduceResponse as Topic;
+use crate::io::reader::Readable;

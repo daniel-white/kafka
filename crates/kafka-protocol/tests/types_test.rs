@@ -1,5 +1,5 @@
 use kafka_common::uuid::Uuid;
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::types::Type;
 use rstest::rstest;
 

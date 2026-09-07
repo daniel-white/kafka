@@ -16,4 +16,6 @@ pub use errors::MetadataError;
 pub use record_serde::{MetadataRecordSerde, RecordSerde};
 pub use types::MetadataRecordType;
 
-pub use kafka_protocol::{byte_utils, reader::Reader, writer::Writer};
+pub use kafka_protocol::{byte_utils};
+pub use kafka_protocol::io::reader::Reader;
+pub use kafka_protocol::io::writer::Writer;

@@ -1,7 +1,7 @@
 use kafka_metadata::{ApiMessageAndVersion, MetadataRecordSerde, MetadataRecordType, RecordSerde};
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::reader::Reader;
-use kafka_protocol::writer::Writer;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::reader::Reader;
+use kafka_protocol::io::writer::Writer;
 use rstest::rstest;
 
 fn build_message(data: Vec<u8>, api_key: i16, version: i16) -> ApiMessageAndVersion {
@@ -145,7 +145,7 @@ fn test_serde_record_size() {
 #[test]
 fn test_serde_invalid_frame_version() {
     // Build bytes with frame_version = 2 (invalid; only 1 is supported)
-    let mut acc = kafka_protocol::byte_buffer_accessor::ByteBufferAccessor::with_capacity(64);
+    let mut acc = kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor::with_capacity(64);
     acc.write_unsigned_varint(2); // invalid frame version
     acc.write_unsigned_varint(2); // api_key = Topic
     acc.write_unsigned_varint(0); // version = 0

@@ -7,29 +7,29 @@
 #![deny(clippy::ptr_arg)]
 
 pub mod api_key;
-pub mod api_versions_response;
-pub mod byte_buffer_accessor;
 pub mod byte_utils;
+pub mod describe_topics;
 pub mod errors;
-pub mod message;
+pub mod fetch;
+pub mod list_offsets;
 pub mod message_context;
-pub mod metadata_response;
-pub mod produce_response;
-pub mod raw_tagged_field;
-pub mod reader;
-pub mod request_types;
-pub mod tagged_fields;
+pub mod metadata;
+pub mod produce;
 pub mod types;
-pub mod writer;
+pub mod io;
+pub mod messages;
 
 pub use api_key::ApiKey;
-pub use api_versions_response::{ApiVersionsRequest, ApiVersionsResponse, ApiVersionEntry};
-pub use message::{message_body_size, Readable, Writable};
+pub use messages::api_versions::{ApiVersionsRequest, ApiVersionsResponse, ApiVersionEntry};
+pub use describe_topics::{DescribeTopicsRequest, DescribeTopicsResponse, DescribeTopicsTopic, DescribeTopicsPartition};
+pub use fetch::FetchRequest;
+pub use io::sizing::compute_size;
+pub use list_offsets::ListOffsetsRequest;
 pub use message_context::{HeaderContext, MessageContext};
-pub use metadata_response::{MetadataRequest, MetadataResponse, MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic};
-pub use produce_response::{ProduceRequest, PartitionProduceResponse, ProduceResponse, TopicProduceResponse};
-pub use reader::Reader;
+pub use metadata::{MetadataRequest, MetadataResponse, MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic};
+pub use produce::{ProduceRequest, PartitionProduceResponse, ProduceResponse, TopicProduceResponse};
+pub use io::reader::Reader;
 pub use kafka_common::uuid;
-pub use raw_tagged_field::RawTaggedField;
-pub use request_types::{DescribeTopicsRequest, FetchRequest, ListOffsetsRequest};
-pub use writer::{SizeCounter, Writer};
+pub use messages::tagged_fields::RawTaggedField;
+pub use io::writer::Writer;
+pub use io::byte_buffer_accessor::ByteBufferAccessor;

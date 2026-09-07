@@ -3,8 +3,8 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
 
-use crate::handlers::{ApiRequest, ApiHandlerResult};
-use kafka_protocol::api_versions_response::{ApiVersionsRequest, ApiVersionsResponse};
+use crate::handlers::{ApiHandlerResult, ApiRequest};
+use kafka_protocol::messages::api_versions::{ApiVersionsRequest, ApiVersionsResponse};
 
 /// Handle an ApiVersions request: return supported API versions from the registry.
 ///

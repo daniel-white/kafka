@@ -4,10 +4,9 @@
 //!
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/ByteBufferAccessor.java
 
-use crate::byte_utils;
-use crate::reader::Reader;
-use crate::writer::Writer;
-use getset::{CopyGetters, Getters};
+use crate::io::reader::Reader;
+use crate::io::writer::Writer;
+use getset::{Getters, CopyGetters};
 use std::io::{self, Read, Write};
 
 /// A byte buffer that implements both [`Reader`] and [`Writer`].
@@ -213,32 +212,9 @@ impl Reader for ByteBufferAccessor {
         Ok(val)
     }
 
-    fn read_double(&mut self) -> io::Result<f64> {
-        let remaining = self.remaining();
-        if remaining < 8 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                format!(
-                    "Error reading byte array of 8 byte(s): only {} byte(s) available",
-                    remaining
-                ),
-            ));
-        }
-        let bits = u64::from_be_bytes([
-            self.buf[self.position],
-            self.buf[self.position + 1],
-            self.buf[self.position + 2],
-            self.buf[self.position + 3],
-            self.buf[self.position + 4],
-            self.buf[self.position + 5],
-            self.buf[self.position + 6],
-            self.buf[self.position + 7],
-        ]);
-        self.position += 8;
-        Ok(f64::from_bits(bits))
-    }
 
-    fn read_array(&mut self, len: usize) -> io::Result<Vec<u8>> {
+
+    fn read_bytes_vec(&mut self, len: usize) -> io::Result<Vec<u8>> {
         let remaining = self.remaining();
         if len > remaining {
             return Err(io::Error::new(
@@ -249,25 +225,11 @@ impl Reader for ByteBufferAccessor {
                 ),
             ));
         }
+        
         let arr = self.buf[self.position..self.position + len].to_vec();
         self.position += len;
+        
         Ok(arr)
-    }
-
-    fn read_unsigned_varint(&mut self) -> io::Result<u32> {
-        byte_utils::read_unsigned_varint(self)
-    }
-
-    fn read_varint(&mut self) -> io::Result<i32> {
-        byte_utils::read_varint(self)
-    }
-
-    fn read_varlong(&mut self) -> io::Result<i64> {
-        byte_utils::read_varlong(self)
-    }
-
-    fn read_byte_buffer(&mut self, len: usize) -> io::Result<Vec<u8>> {
-        Reader::read_array(self, len)
     }
 
     fn remaining(&self) -> usize {
@@ -290,38 +252,18 @@ impl Writer for ByteBufferAccessor {
     }
 
     fn write_short(&mut self, val: i16) {
-        self.write_byte_array(&val.to_be_bytes());
+        self.write_bytes(&val.to_be_bytes());
     }
 
     fn write_int(&mut self, val: i32) {
-        self.write_byte_array(&val.to_be_bytes());
+        self.write_bytes(&val.to_be_bytes());
     }
 
     fn write_long(&mut self, val: i64) {
-        self.write_byte_array(&val.to_be_bytes());
+        self.write_bytes(&val.to_be_bytes());
     }
 
-    fn write_double(&mut self, val: f64) {
-        self.write_byte_array(&val.to_be_bytes());
-    }
-
-    fn write_byte_array(&mut self, arr: &[u8]) {
+    fn write_bytes(&mut self, arr: &[u8]) {
         self.write_all(arr).unwrap();
-    }
-
-    fn write_unsigned_varint(&mut self, val: u32) {
-        byte_utils::write_unsigned_varint(val, self).unwrap();
-    }
-
-    fn write_varint(&mut self, val: i32) {
-        byte_utils::write_varint(val, self).unwrap();
-    }
-
-    fn write_varlong(&mut self, val: i64) {
-        byte_utils::write_varlong(val, self).unwrap();
-    }
-
-    fn write_byte_buffer(&mut self, buf: &[u8]) {
-        self.write_byte_array(buf);
     }
 }

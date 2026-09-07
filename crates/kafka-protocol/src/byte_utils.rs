@@ -1,7 +1,7 @@
 //! Low-level varint / varlong / double read-write helpers.
 //!
 //! Mirrors `org.apache.kafka.common.utils.internals.ByteUtils`.
-//!
+//! 
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/utils/internals/ByteUtils.java
 
 use std::io::{self, Read, Write};
@@ -20,7 +20,7 @@ pub fn read_unsigned_varint<R: Read>(r: &mut R) -> io::Result<u32> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Varint is too long, the most significant bit in the 5th byte is set, converted value: {:#x}",
-                    result),
+                        result),
             ));
         }
         result |= ((b & 0x7F) as u32) << shift;
@@ -53,7 +53,7 @@ pub fn read_unsigned_varlong<R: Read>(r: &mut R) -> io::Result<u64> {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Varlong is too long, most significant bit in the 10th byte is set, converted value: {:#x}",
-                    value),
+                        value),
             ));
         }
         value |= ((b & 0x7F) as u64) << shift;

@@ -24,10 +24,10 @@ use crate::record_batch::{
     MAGIC_VALUE_V2, MAX_RECORD_OVERHEAD, NO_SEQUENCE, NULL_VARINT_SIZE_BYTES,
 };
 use kafka_errors::KafkaError;
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::byte_utils::{size_of_varint, size_of_varlong};
-use kafka_protocol::reader::Reader;
-use kafka_protocol::writer::Writer;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::reader::Reader;
+use kafka_protocol::io::writer::Writer;
 
 /// A single record in the magic v2+ format.
 ///
@@ -165,7 +165,7 @@ impl DefaultRecord {
             });
         }
 
-        let body = readable.read_array(size_of_body as usize)?;
+        let body = readable.read_bytes_array(size_of_body as usize)?;
 
         let mut accessor = ByteBufferAccessor::from_bytes(body);
 
@@ -188,7 +188,7 @@ impl DefaultRecord {
         let key = if key_size < 0 {
             None
         } else {
-            Some(accessor.read_array(key_size as usize)?.into_boxed_slice())
+            Some(accessor.read_bytes_array(key_size as usize)?.into_boxed_slice())
         };
 
         // read value
@@ -196,7 +196,7 @@ impl DefaultRecord {
         let value = if value_size < 0 {
             None
         } else {
-            Some(accessor.read_array(value_size as usize)?.into_boxed_slice())
+            Some(accessor.read_bytes_array(value_size as usize)?.into_boxed_slice())
         };
 
         // read headers
@@ -242,7 +242,7 @@ impl DefaultRecord {
             if header_key_size < 0 {
                 return Err(RecordError::InvalidHeaderKeySize(header_key_size));
             }
-            let key_bytes = readable.read_array(header_key_size as usize)?;
+            let key_bytes = readable.read_bytes_array(header_key_size as usize)?;
             let key = String::from_utf8(key_bytes).map_err(|e| {
                 RecordError::Kafka(KafkaError::InvalidRecord {
                     message: format!("Invalid UTF-8 in header key: {}", e),
@@ -253,7 +253,7 @@ impl DefaultRecord {
             let value = if header_value_size < 0 {
                 None
             } else {
-                Some(readable.read_array(header_value_size as usize)?)
+                Some(readable.read_bytes_array(header_value_size as usize)?)
             };
 
             headers.push(Header::new(key, value));
@@ -291,7 +291,7 @@ impl DefaultRecord {
             None => writable.write_varint(-1),
             Some(k) => {
                 writable.write_varint(k.len() as i32);
-                writable.write_byte_array(k);
+                writable.write_bytes(k);
             }
         }
 
@@ -300,7 +300,7 @@ impl DefaultRecord {
             None => writable.write_varint(-1),
             Some(v) => {
                 writable.write_varint(v.len() as i32);
-                writable.write_byte_array(v);
+                writable.write_bytes(v);
             }
         }
 
@@ -309,13 +309,13 @@ impl DefaultRecord {
         for header in headers {
             let key_bytes = header.key().as_bytes();
             writable.write_varint(key_bytes.len() as i32);
-            writable.write_byte_array(key_bytes);
+            writable.write_bytes(key_bytes);
 
             match header.value() {
                 None => writable.write_varint(-1),
                 Some(v) => {
                     writable.write_varint(v.len() as i32);
-                    writable.write_byte_array(v);
+                    writable.write_bytes(v);
                 }
             }
         }

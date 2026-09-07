@@ -4,7 +4,7 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
 use crate::handlers::{ApiRequest, ApiHandlerResult};
-use kafka_protocol::metadata_response::{MetadataRequest, MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
+use kafka_protocol::metadata::{MetadataRequest, MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
 
 /// Handle a Metadata request: return brokers list and topic metadata.
 ///
@@ -18,7 +18,7 @@ pub fn handle_metadata(ctx: ApiRequest) -> ApiHandlerResult<MetadataResponse>{
     let state = ctx.state().read_atomic();
     // Get the broker's advertised endpoint from server state
     let (broker_host, broker_port) = state.get_broker_endpoint();
-    let brokers = vec![kafka_protocol::metadata_response::MetadataResponseBroker::new(
+    let brokers = vec![kafka_protocol::metadata::MetadataResponseBroker::new(
         0,
         broker_host,
         broker_port,

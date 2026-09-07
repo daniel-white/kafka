@@ -26,15 +26,16 @@ pub type BrokerRequest = KafkaRequest;
 pub type BrokerResponseFrame = Vec<u8>;
 
 use crate::server_state::ServerState;
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::errors::ProtocolError;
-use kafka_protocol::message_context::MessageContext;
-use kafka_protocol::{Readable, Writable};
-use getset::{CloneGetters, CopyGetters, Getters};
 use fast_stm::TVar;
+use getset::{CloneGetters, CopyGetters, Getters};
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::response_header::ResponseHeader;
 use kafka_protocol::byte_utils;
+use kafka_protocol::errors::{Errors, ProtocolError};
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::reader::Readable;
+use kafka_protocol::io::writer::Writable;
+use kafka_protocol::message_context::MessageContext;
 use kafka_protocol::ApiKey;
 
 /// Common context passed to all request handlers.
@@ -123,7 +124,7 @@ impl <W: Writable> ApiResponse<W> {
     pub fn write_frame(self) -> Result<Vec<u8>, ProtocolError> {
         let header_size = if self.is_flexible { 5 } else { 4 };
         let msg_ctx = MessageContext::new(self.api_version, self.is_flexible);
-        let body_size = kafka_protocol::message_body_size(&self.msg, &msg_ctx);
+        let body_size = kafka_protocol::compute_size(&self.msg, &msg_ctx);
         let response_size = (header_size + body_size) as i32;
         let mut frame = Vec::with_capacity(4 + header_size + body_size);
         frame.extend_from_slice(&response_size.to_be_bytes());
@@ -151,6 +152,65 @@ pub fn build_empty_response(correlation_id: i32) -> Vec<u8> {
     frame
 }
 
+/// Shared helper: build response frame from raw body bytes.
+///
+/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
+pub fn build_response_frame(correlation_id: i32, is_flexible: bool, body: Vec<u8>) -> Vec<u8> {
+    let header_size = if is_flexible { 5 } else { 4 };
+    let response_size = (header_size + body.len()) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body.len());
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    frame.extend_from_slice(&correlation_id.to_be_bytes());
+    if is_flexible {
+        byte_utils::write_unsigned_varint(0, &mut frame).unwrap(); // tagged_fields
+    }
+    frame.extend_from_slice(&body);
+    frame
+}
+
+/// Shared helper: build response frame from a Writable message.
+///
+/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
+pub fn build_response_frame_with<W: Writable>(
+    correlation_id: i32,
+    is_flexible: bool,
+    api_version: i16,
+    msg: W,
+) -> Vec<u8> {
+    let header_size = if is_flexible { 5 } else { 4 };
+    let msg_ctx = MessageContext::new(api_version, is_flexible);
+    let body_size = kafka_protocol::compute_size(&msg, &msg_ctx);
+    let response_size = (header_size + body_size) as i32;
+    let mut frame = Vec::with_capacity(4 + header_size + body_size);
+    frame.extend_from_slice(&response_size.to_be_bytes());
+    frame.extend_from_slice(&correlation_id.to_be_bytes());
+    if is_flexible {
+        byte_utils::write_unsigned_varint(0, &mut frame).unwrap(); // tagged_fields
+    }
+    msg.write(&mut frame, &msg_ctx);
+    frame
+}
+
+/// Build an error response frame for the given API key and protocol error.
+///
+/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
+fn build_error_response(api_key: ApiKey, correlation_id: i32, is_flexible: bool, api_version: i16, error: ProtocolError) -> Vec<u8> {
+    let error_code = match error {
+        ProtocolError::UnsupportedVersion => Errors::UnsupportedVersion.code(),
+        ProtocolError::Io(_) => Errors::UnknownServerError.code(),
+    };
+    let header = ResponseHeader::new(correlation_id);
+    let body_size = header.size() as i32;
+    let mut frame = Vec::with_capacity(4 + header.size());
+    frame.extend_from_slice(&body_size.to_be_bytes());
+    header.write(&mut frame);
+    // Include error_code in the response body
+    let mut body = Vec::new();
+    body.extend_from_slice(&error_code.to_be_bytes());
+    frame.extend_from_slice(&body);
+    frame
+}
+
 /// Dispatch a parsed request to the appropriate handler.
 ///
 /// State is read-only for most handlers; Produce needs mutable state to
@@ -164,29 +224,37 @@ pub fn dispatch(
     state: TVar<ServerState>,
 ) -> BrokerResponseFrame {
     let api_key = ApiKey::from_id(request.header.api_key);
+    let correlation_id = request.header.correlation_id;
+    let is_flexible = request.header.flexible;
+    let api_version = request.header.api_version;
     let req = ApiRequest::from_request(request, state);
 
-    // TODO handle error
     match api_key {
         ApiKey::ApiVersions => {
-            let res = handle_api_versions(req).unwrap(); 
-            res.write_frame().unwrap()
+            match handle_api_versions(req) {
+                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
+                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
+            }
         }
         ApiKey::DescribeTopicPartitions => {
             handle_describe_topics(req)
         }
         ApiKey::Metadata => {
-            let res = handle_metadata(req).unwrap();
-            res.write_frame().unwrap()
+            match handle_metadata(req) {
+                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
+                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
+            }
         }
         ApiKey::Produce => {
-            let res =  handle_produce(req).unwrap();
-            res.write_frame().unwrap()
+            match handle_produce(req) {
+                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
+                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
+            }
         }
         ApiKey::Fetch => {
             handle_fetch(req)
         }
         ApiKey::ListOffsets => handle_list_offsets(req),
-        _ => build_empty_response(req.correlation_id),
+        _ => build_empty_response(correlation_id),
     }
 }

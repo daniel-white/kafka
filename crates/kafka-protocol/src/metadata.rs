@@ -15,10 +15,11 @@
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/MetadataRequest.java
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
-use crate::reader::Reader;
-use crate::writer::Writer;
 use crate::errors::ProtocolError;
-use crate::{MessageContext, Readable, Writable};
+use crate::io::reader::Reader;
+use crate::io::writer::{Writable, Writer};
+use crate::MessageContext;
+use getset::{CopyGetters, Getters};
 
 /// Metadata request message.
 ///
@@ -35,7 +36,6 @@ impl Readable for MetadataRequest {
         Ok(MetadataRequest)
     }
 }
-use getset::{CopyGetters, Getters};
 
 // ── Broker ───────────────────────────────────────────────────────────────
 
@@ -480,3 +480,4 @@ impl Readable for MetadataResponse {
 pub use MetadataResponseBroker as Broker;
 pub use MetadataResponsePartition as Partition;
 pub use MetadataResponseTopic as Topic;
+use crate::io::reader::Readable;

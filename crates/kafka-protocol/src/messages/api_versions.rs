@@ -8,10 +8,12 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsRequest.java
 //!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
 
-use crate::reader::Reader;
-use crate::writer::Writer;
 use crate::errors::ProtocolError;
-use crate::{MessageContext, Readable, Writable};
+use crate::io::reader::Readable;
+use crate::io::reader::Reader;
+use crate::io::writer::{Writable, Writer};
+use crate::messages::tagged_fields::TaggedFields;
+use crate::MessageContext;
 use getset::{CopyGetters, Getters};
 
 /// ApiVersions request message.
@@ -64,7 +66,7 @@ impl Writable for ApiVersionEntry {
         w.write_short(self.max_version);
         // tagged_fields (flexible only, v3+)
         if flexible {
-            w.write_empty_tagged_fields();
+            TaggedFields::empty().write(w, ctx)
         }
     }
 }
@@ -149,7 +151,7 @@ impl Writable for ApiVersionsResponse {
         // Note: SupportedFeatures, FinalizedFeaturesEpoch, etc. are tagged fields
         // that we don't populate.
         if flexible {
-            w.write_empty_tagged_fields();
+            TaggedFields::empty().write(w, ctx);
         }
     }
 }
@@ -179,5 +181,3 @@ impl Readable for ApiVersionsResponse {
     }
 }
 
-// Re-export for convenience
-pub use ApiVersionEntry as Entry;

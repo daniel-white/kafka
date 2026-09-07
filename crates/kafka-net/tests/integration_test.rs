@@ -7,7 +7,7 @@ use kafka_compress::compression::Compression;
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::request_header::RequestHeader;
 use kafka_net::response_header::ResponseHeader;
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_record::header::Header;
 use kafka_record::record::DefaultRecord;
 use kafka_record::record_batch::{RecordBatchHeader, MAGIC_VALUE_V2};

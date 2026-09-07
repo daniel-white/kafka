@@ -1,10 +1,10 @@
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_record::compression_type::CompressionType;
 use kafka_record::header::Header;
 use kafka_record::memory_records::MemoryRecords;
 use kafka_record::record::DefaultRecord;
 use kafka_record::record_batch::{
-    self, RecordBatchHeader, RECORD_BATCH_OVERHEAD, ATTRIBUTES_OFFSET, CRC_OFFSET, CRC_LENGTH,
+    self, RecordBatchHeader, ATTRIBUTES_OFFSET, CRC_LENGTH, CRC_OFFSET, RECORD_BATCH_OVERHEAD,
 };
 use kafka_record::DefaultRecordBatch;
 

@@ -1,6 +1,6 @@
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::raw_tagged_field::RawTaggedField;
-use kafka_protocol::tagged_fields::TaggedFields;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::messages::tagged_fields::RawTaggedField;
+use kafka_protocol::messages::tagged_fields::TaggedFields;
 
 // Test basic creation and properties
 #[test]

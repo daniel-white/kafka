@@ -3,8 +3,8 @@
 //! Each variant knows how to read/write/compute-size on any `Reader`/`Writer`
 //! via generic parameter dispatch (no `dyn Trait`), per the no-virtual-dispatch rule.
 
-use crate::reader::Reader;
-use crate::writer::Writer;
+use crate::io::reader::Reader;
+use crate::io::writer::Writer;
 use kafka_common::uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,7 +171,7 @@ impl Type {
                 message: format!("Bytes size {} cannot be negative", size),
             });
         }
-        Ok(r.read_array(size as usize)?)
+        Ok(r.read_bytes_array(size as usize)?)
     }
 
     pub fn read_compact_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Vec<u8>> {
@@ -182,7 +182,7 @@ impl Type {
             });
         }
         let actual_size = (size - 1) as usize;
-        Ok(r.read_array(actual_size)?)
+        Ok(r.read_bytes_array(actual_size)?)
     }
 
     pub fn read_nullable_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
@@ -190,7 +190,7 @@ impl Type {
         if size < 0 {
             return Ok(None);
         }
-        Ok(Some(r.read_array(size as usize)?))
+        Ok(Some(r.read_bytes_array(size as usize)?))
     }
 
     pub fn read_compact_nullable_bytes<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<Option<Vec<u8>>> {
@@ -199,7 +199,7 @@ impl Type {
             return Ok(None);
         }
         let actual_size = (size - 1) as usize;
-        Ok(Some(r.read_array(actual_size)?))
+        Ok(Some(r.read_bytes_array(actual_size)?))
     }
 
     pub fn read_varint<R: Reader>(&self, r: &mut R) -> kafka_errors::Result<i32> {
@@ -253,13 +253,13 @@ impl Type {
             panic!("String length {} is larger than the maximum string length", bytes.len());
         }
         w.write_short(bytes.len() as i16);
-        w.write_byte_array(bytes);
+        w.write_bytes(bytes);
     }
 
     pub fn write_compact_string<W: Writer>(&self, w: &mut W, val: &str) {
         let bytes = val.as_bytes();
         w.write_unsigned_varint(bytes.len() as u32 + 1);
-        w.write_byte_array(bytes);
+        w.write_bytes(bytes);
     }
 
     pub fn write_nullable_string<W: Writer>(&self, w: &mut W, val: Option<&str>) {
@@ -278,12 +278,12 @@ impl Type {
 
     pub fn write_bytes<W: Writer>(&self, w: &mut W, val: &[u8]) {
         w.write_int(val.len() as i32);
-        w.write_byte_array(val);
+        w.write_bytes(val);
     }
 
     pub fn write_compact_bytes<W: Writer>(&self, w: &mut W, val: &[u8]) {
         w.write_unsigned_varint(val.len() as u32 + 1);
-        w.write_byte_array(val);
+        w.write_bytes(val);
     }
 
     pub fn write_nullable_bytes<W: Writer>(&self, w: &mut W, val: Option<&[u8]>) {
@@ -349,7 +349,7 @@ impl Type {
     }
 
     pub fn size_of_compact_string(&self, val: &str) -> usize {
-        crate::byte_utils::size_of_unsigned_varint(val.len() as u32 + 1) + val.len()
+        Writer::size_of_compact_string(val)
     }
 
     pub fn size_of_nullable_string(&self, val: Option<&str>) -> usize {
@@ -371,7 +371,7 @@ impl Type {
     }
 
     pub fn size_of_compact_bytes(&self, val: &[u8]) -> usize {
-        crate::byte_utils::size_of_unsigned_varint(val.len() as u32 + 1) + val.len()
+        Writer::size_of_unsigned_varint(val.len() as u32 + 1) + val.len()
     }
 
     pub fn size_of_nullable_bytes(&self, val: Option<&[u8]>) -> usize {
@@ -389,10 +389,10 @@ impl Type {
     }
 
     pub fn size_of_varint(&self, val: i32) -> usize {
-        crate::byte_utils::size_of_varint(val)
+        Writer::size_of_varint(val)
     }
 
     pub fn size_of_varlong(&self, val: i64) -> usize {
-        crate::byte_utils::size_of_varlong(val)
+        Writer::size_of_varlong(val)
     }
 }

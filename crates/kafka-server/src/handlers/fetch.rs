@@ -9,7 +9,7 @@ use crate::handlers::{build_response_frame, ApiRequest};
 use crate::server_state::ServerState;
 use kafka_protocol::byte_utils;
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
-use kafka_protocol::request_types::FetchRequest;
+use kafka_protocol::fetch::FetchRequest;
 
 /// Parsed Fetch request details for one topic-partition.
 ///

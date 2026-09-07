@@ -4,7 +4,7 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ListOffsetsResponse.java
 
 use crate::handlers::{build_response_frame, ApiRequest};
-use kafka_protocol::request_types::ListOffsetsRequest;
+use kafka_protocol::list_offsets::ListOffsetsRequest;
 
 /// Handle a ListOffsets request: return minimal response with empty topic list.
 ///

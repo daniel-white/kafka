@@ -1,8 +1,8 @@
 // Tests mirroring clients/.../protocol/DataOutputStreamWritableTest.java
 // MIGRATION_SOURCE: clients/src/test/java/org/apache/kafka/common/protocol/DataOutputStreamWritableTest.java
 
-use kafka_protocol::byte_buffer_accessor::ByteBufferAccessor;
-use kafka_protocol::writer::Writer;
+use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
+use kafka_protocol::io::writer::Writer;
 
 #[test]
 fn test_writing_sliced_byte_buffer() {

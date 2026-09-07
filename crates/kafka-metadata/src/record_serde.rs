@@ -7,7 +7,9 @@
 //! - server-common/src/main/java/org/apache/kafka/server/common/serialization/AbstractApiMessageSerde.java
 
 use crate::api_message::ApiMessageAndVersion;
-use kafka_protocol::{byte_utils, reader::Reader, writer::Writer};
+use kafka_protocol::io::reader::Reader;
+use kafka_protocol::io::writer::Writer;
+use kafka_protocol::byte_utils;
 
 /// Frame version written before the API key.
 /// Mirrors `DEFAULT_FRAME_VERSION = 1` in `AbstractApiMessageSerde`.
@@ -81,7 +83,7 @@ impl RecordSerde<ApiMessageAndVersion> for MetadataRecordSerde {
 
         // Body is the remaining bytes after the frame header.
         let body_len = std::cmp::min(remaining, readable.remaining());
-        let data = readable.read_array(body_len)?;
+        let data = readable.read_bytes_array(body_len)?;
 
         Ok(ApiMessageAndVersion::new(data, api_key, version))
     }

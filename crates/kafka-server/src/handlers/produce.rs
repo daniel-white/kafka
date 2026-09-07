@@ -7,7 +7,7 @@
 
 use crate::handlers::{build_response_frame_with, ApiHandlerResult, ApiRequest};
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
-use kafka_protocol::produce_response::{
+use kafka_protocol::produce::{
     ProduceRequest, PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
 };
 

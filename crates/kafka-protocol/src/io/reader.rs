@@ -76,6 +76,15 @@ pub trait Reader {
         Ok(Some(self.read_string(len as usize)?))
     }
 
+    /// Read a NULLABLE_BYTES (int32 length, -1 for null).
+    fn read_nullable_bytes(&mut self) -> io::Result<Option<Vec<u8>>> {
+        let len = self.read_int()?;
+        if len < 0 {
+            return Ok(None);
+        }
+        Ok(Some(self.read_bytes_vec(len as usize)?))
+    }
+
     /// Read a COMPACT_NULLABLE_STRING (unsigned varint, 0 for null).
     fn read_compact_nullable_string(&mut self) -> io::Result<Option<String>> {
         let raw_len = self.read_unsigned_varint()?;
@@ -84,6 +93,16 @@ pub trait Reader {
         }
         let actual_len = (raw_len - 1) as usize;
         Ok(Some(self.read_string(actual_len)?))
+    }
+
+    /// Read a COMPACT_NULLABLE_BYTES (unsigned varint, 0 for null).
+    fn read_compact_nullable_bytes(&mut self) -> io::Result<Option<Vec<u8>>> {
+        let raw_len = self.read_unsigned_varint()?;
+        if raw_len == 0 {
+            return Ok(None);
+        }
+        let actual_len = (raw_len - 1) as usize;
+        Ok(Some(self.read_bytes_vec(actual_len)?))
     }
 
     /// Read an ARRAY/COMPACT_ARRAY count, returning the actual element count.

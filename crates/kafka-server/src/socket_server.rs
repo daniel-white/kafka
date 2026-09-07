@@ -9,9 +9,10 @@
 use crate::KafkaServer;
 use crate::handlers::dispatch;
 use crate::server_state::ServerState;
-use kafka_net::kafka_request::KafkaRequest;
-use kafka_net::network_receive::NetworkReceive;
-use kafka_net::request_header::RequestHeader;
+use kafka_protocol::kafka_request::KafkaRequest;
+use kafka_protocol::network_receive::NetworkReceive;
+use kafka_protocol::request_header::RequestHeader;
+use kafka_protocol::errors::NetworkError;
 use kafka_server_common::ProcessStatus;
 use std::sync::Arc;
 use fast_stm::TVar;
@@ -35,14 +36,14 @@ impl KafkaConnection {
     /// Feed raw bytes from the network into the receive buffer.
     ///
     /// MIGRATION_SOURCE: clients/.../NetworkReceive.java
-    pub fn feed(&mut self, data: &[u8]) -> Result<usize, kafka_net::errors::NetworkError> {
+    pub fn feed(&mut self, data: &[u8]) -> Result<usize, NetworkError> {
         self.receive.feed(data)
     }
 
     /// Attempt to parse a complete request header from the received data.
     ///
     /// MIGRATION_SOURCE: clients/.../RequestHeader.java
-    pub fn try_parse_request(&self) -> Option<Result<RequestHeader, kafka_net::errors::NetworkError>> {
+    pub fn try_parse_request(&self) -> Option<Result<RequestHeader, NetworkError>> {
         if !self.receive.complete() {
             return None;
         }

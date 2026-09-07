@@ -4,7 +4,7 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
 
 use crate::handlers::{ApiRequest, ApiHandlerResult};
-use kafka_protocol::describe_topics::{
+use kafka_protocol::messages::describe_topics::{
     DescribeTopicsRequest, DescribeTopicsResponse, DescribeTopicsTopic, DescribeTopicsPartition,
 };
 
@@ -12,7 +12,7 @@ use kafka_protocol::describe_topics::{
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
-pub fn handle_describe_topics(ctx: ApiRequest) -> ApiHandlerResult<DescribeTopicsResponse> {
+pub fn handle_describe_topics(ctx: ApiRequest) -> ApiHandlerResult {
     // Read the request body (empty for this broker implementation)
     let _req_msg = ctx.read_msg::<DescribeTopicsRequest>()?;
 
@@ -42,6 +42,5 @@ pub fn handle_describe_topics(ctx: ApiRequest) -> ApiHandlerResult<DescribeTopic
         .collect();
 
     let res_msg = DescribeTopicsResponse::new(0, topics);
-    let res = ctx.send_msg(res_msg);
-    Ok(res)
+    ctx.respond_with(res_msg)
 }

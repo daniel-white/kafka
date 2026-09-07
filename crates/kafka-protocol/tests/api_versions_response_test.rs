@@ -10,11 +10,12 @@ use kafka_protocol::MessageContext;
 fn write_and_read(response: &ApiVersionsResponse, api_version: i16, flexible: bool) -> ApiVersionsResponse {
     let ctx = MessageContext::new(api_version, flexible);
 
-    let mut buf = Vec::new();
+    let mut buf = ByteBufferAccessor::with_capacity(1024);
     Writable::write(response, &mut buf, &ctx);
-    assert_eq!(buf.len(), compute_size(response, &ctx));
+    buf.flip();
+    assert_eq!(buf.buffer().len(), compute_size(response, &ctx));
 
-    let mut reader = ByteBufferAccessor::from_bytes(buf);
+    let mut reader = ByteBufferAccessor::from_bytes(buf.buffer().to_vec());
     Readable::read::<ByteBufferAccessor>(&mut reader, &ctx).unwrap()
 }
 
@@ -97,16 +98,18 @@ fn test_api_versions_response_byte_layout_v0() {
     let response = ApiVersionsResponse::new(0, entries, 0);
 
     let ctx = MessageContext::new(0, false);
-    let mut buf = Vec::new();
+    let mut buf = ByteBufferAccessor::with_capacity(1024);
     Writable::write(&response, &mut buf, &ctx);
+    buf.flip();
 
+    let bytes = buf.buffer();
     // v0: error_code(2) + array_count(4) + api_key(2) + min(2) + max(2) = 12
-    assert_eq!(buf.len(), 12);
-    assert_eq!(i16::from_be_bytes([buf[0], buf[1]]), 0); // ErrorCode = 0
-    assert_eq!(i32::from_be_bytes([buf[2], buf[3], buf[4], buf[5]]), 1); // Count = 1
-    assert_eq!(i16::from_be_bytes([buf[6], buf[7]]), 18); // ApiKey
-    assert_eq!(i16::from_be_bytes([buf[8], buf[9]]), 0); // MinVersion
-    assert_eq!(i16::from_be_bytes([buf[10], buf[11]]), 5); // MaxVersion
+    assert_eq!(bytes.len(), 12);
+    assert_eq!(i16::from_be_bytes([bytes[0], bytes[1]]), 0); // ErrorCode = 0
+    assert_eq!(i32::from_be_bytes([bytes[2], bytes[3], bytes[4], bytes[5]]), 1); // Count = 1
+    assert_eq!(i16::from_be_bytes([bytes[6], bytes[7]]), 18); // ApiKey
+    assert_eq!(i16::from_be_bytes([bytes[8], bytes[9]]), 0); // MinVersion
+    assert_eq!(i16::from_be_bytes([bytes[10], bytes[11]]), 5); // MaxVersion
 }
 
 #[test]
@@ -115,10 +118,12 @@ fn test_api_versions_response_byte_layout_v3() {
     let response = ApiVersionsResponse::new(0, entries, 0);
 
     let ctx = MessageContext::new(3, true);
-    let mut buf = Vec::new();
+    let mut buf = ByteBufferAccessor::with_capacity(1024);
     Writable::write(&response, &mut buf, &ctx);
+    buf.flip();
 
+    let bytes = buf.buffer();
     // v3 flexible: error_code(2) + compact_array_count(1 varint) + api_key(2) + min(2) + max(2)
     // + entry_tags(1) + throttle(4) + top_tags(1) = 15
-    assert_eq!(buf.len(), 15);
+    assert_eq!(bytes.len(), 15);
 }

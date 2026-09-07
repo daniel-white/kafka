@@ -13,11 +13,16 @@ fn test_read_array() {
     accessor.write_int(12345);
     accessor.flip();
 
-    let test_array2 = accessor.read_bytes_array(3).unwrap();
-    assert_eq!(test_array.to_vec(), test_array2);
+    let test_array2: [u8; 3] = accessor.read_bytes_array().unwrap();
+    assert_eq!(test_array.to_vec(), test_array2.to_vec());
     assert_eq!(12345, accessor.read_int().unwrap());
 
-    let err = accessor.read_bytes_array(3).unwrap_err();
+    // Error case - reading past the end
+    let mut short_accessor = ByteBufferAccessor::with_capacity(1);
+    short_accessor.write_byte(0x01);
+    short_accessor.flip();
+    let _ = short_accessor.read_bytes_vec(1).unwrap();
+    let err = short_accessor.read_bytes_vec(3).unwrap_err();
     assert_eq!(
         "Error reading byte array of 3 byte(s): only 0 byte(s) available",
         err.to_string()

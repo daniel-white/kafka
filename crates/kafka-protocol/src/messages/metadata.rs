@@ -18,8 +18,9 @@
 use crate::errors::ProtocolError;
 use crate::io::reader::Reader;
 use crate::io::writer::{Writable, Writer};
+use crate::messages::tagged_fields::TaggedFields;
 use crate::MessageContext;
-use getset::{CopyGetters, Getters};
+use getset::{Getters};
 
 /// Metadata request message.
 ///
@@ -40,16 +41,16 @@ impl Readable for MetadataRequest {
 // ── Broker ───────────────────────────────────────────────────────────────
 
 /// A single broker entry in the MetadataResponse.
-#[derive(Debug, Clone, CopyGetters, Getters)]
+#[derive(Debug, Clone, Getters)]
 pub struct MetadataResponseBroker {
-    #[get_copy = "pub"]
     node_id: i32,
-    #[get = "pub"]
+    #[get]
     host: String,
-    #[get_copy = "pub"]
     port: i32,
-    #[get = "pub"]
+    #[get]
     rack: Option<String>,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl MetadataResponseBroker {
@@ -59,8 +60,12 @@ impl MetadataResponseBroker {
             host,
             port,
             rack,
+            tagged_fields: TaggedFields::empty(),
         }
     }
+
+    pub fn node_id(&self) -> i32 { self.node_id }
+    pub fn port(&self) -> i32 { self.port }
 }
 
 impl Writable for MetadataResponseBroker {
@@ -86,7 +91,7 @@ impl Writable for MetadataResponseBroker {
         }
         // tagged_fields (flexible only)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -114,15 +119,18 @@ impl Readable for MetadataResponseBroker {
         } else {
             None
         };
-        // Skip tagged_fields (flexible)
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
+        // tagged_fields (flexible)
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
         Ok(MetadataResponseBroker {
             node_id,
             host,
             port,
             rack,
+            tagged_fields,
         })
     }
 }
@@ -130,16 +138,22 @@ impl Readable for MetadataResponseBroker {
 // ── Partition ────────────────────────────────────────────────────────────
 
 /// A single partition entry in the MetadataResponse.
-#[derive(Debug, Clone, CopyGetters)]
+#[derive(Debug, Clone, Getters)]
 pub struct MetadataResponsePartition {
-    #[get_copy = "pub"]
     partition_index: i32,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl MetadataResponsePartition {
     pub fn new(partition_index: i32) -> Self {
-        MetadataResponsePartition { partition_index }
+        MetadataResponsePartition {
+            partition_index,
+            tagged_fields: TaggedFields::empty(),
+        }
     }
+
+    pub fn partition_index(&self) -> i32 { self.partition_index }
 }
 
 impl Writable for MetadataResponsePartition {
@@ -167,7 +181,7 @@ impl Writable for MetadataResponsePartition {
         }
         // tagged_fields (flexible)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -203,26 +217,31 @@ impl Readable for MetadataResponsePartition {
             }
         }
         // tagged_fields
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
-        Ok(MetadataResponsePartition { partition_index })
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
+        Ok(MetadataResponsePartition {
+            partition_index,
+            tagged_fields,
+        })
     }
 }
 
 // ── Topic ────────────────────────────────────────────────────────────────
 
 /// A single topic entry in the MetadataResponse.
-#[derive(Debug, Clone, Getters, CopyGetters)]
+#[derive(Debug, Clone, Getters)]
 pub struct MetadataResponseTopic {
-    #[get = "pub"]
+    #[get]
     name: String,
-    #[get_copy = "pub"]
     error_code: i16,
-    #[get_copy = "pub"]
     is_internal: bool,
-    #[get = "pub"]
+    #[get]
     partitions: Vec<MetadataResponsePartition>,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl MetadataResponseTopic {
@@ -237,8 +256,12 @@ impl MetadataResponseTopic {
             error_code,
             is_internal,
             partitions,
+            tagged_fields: TaggedFields::empty(),
         }
     }
+
+    pub fn error_code(&self) -> i16 { self.error_code }
+    pub fn is_internal(&self) -> bool { self.is_internal }
 }
 
 impl Writable for MetadataResponseTopic {
@@ -273,7 +296,7 @@ impl Writable for MetadataResponseTopic {
         }
         // tagged_fields (flexible)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -310,14 +333,17 @@ impl Readable for MetadataResponseTopic {
             let _ = r.read_int()?;
         }
         // tagged_fields
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
         Ok(MetadataResponseTopic {
             name,
             error_code,
             is_internal,
             partitions,
+            tagged_fields,
         })
     }
 }
@@ -334,6 +360,7 @@ pub struct MetadataResponse {
     topics: Vec<MetadataResponseTopic>,
     cluster_authorized_operations: i32,
     error_code: i16,
+    tagged_fields: TaggedFields,
 }
 
 impl MetadataResponse {
@@ -355,6 +382,7 @@ impl MetadataResponse {
             topics,
             cluster_authorized_operations,
             error_code,
+            tagged_fields: TaggedFields::empty(),
         }
     }
 
@@ -405,7 +433,7 @@ impl Writable for MetadataResponse {
         }
         // Top-level tagged_fields (flexible body only)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -461,9 +489,11 @@ impl Readable for MetadataResponse {
             0
         };
         // tagged_fields (flexible body only)
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
         Ok(MetadataResponse {
             throttle_time_ms,
             brokers,
@@ -472,6 +502,7 @@ impl Readable for MetadataResponse {
             topics,
             cluster_authorized_operations,
             error_code,
+            tagged_fields,
         })
     }
 }

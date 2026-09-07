@@ -16,7 +16,7 @@
 //!   tagged_fields tagged_fields
 
 use crate::errors::NetworkError;
-use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
+use crate::byte_utils::read_unsigned_varint_from_slice;
 
 /// Write an unsigned varint to a byte buffer.
 fn write_unsigned_varint_to_buf(buf: &mut Vec<u8>, value: u32) {

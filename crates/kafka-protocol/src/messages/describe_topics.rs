@@ -11,6 +11,7 @@ use crate::errors::ProtocolError;
 use crate::io::reader::Readable;
 use crate::io::reader::Reader;
 use crate::io::writer::Writable;
+use crate::messages::tagged_fields::TaggedFields;
 use crate::{MessageContext, Writer};
 use getset::Getters;
 
@@ -42,11 +43,17 @@ pub struct DescribeTopicsResponse {
     throttle_time_ms: i32,
     #[get]
     topics: Vec<DescribeTopicsTopic>,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl DescribeTopicsResponse {
     pub fn new(throttle_time_ms: i32, topics: Vec<DescribeTopicsTopic>) -> Self {
-        DescribeTopicsResponse { throttle_time_ms, topics }
+        DescribeTopicsResponse {
+            throttle_time_ms,
+            topics,
+            tagged_fields: TaggedFields::empty(),
+        }
     }
 }
 
@@ -67,7 +74,7 @@ impl Writable for DescribeTopicsResponse {
 
         // Top-level tagged_fields (flexible only)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -81,10 +88,16 @@ impl Readable for DescribeTopicsResponse {
         for _ in 0..count {
             topics.push(DescribeTopicsTopic::read(r, ctx)?);
         }
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
-        Ok(DescribeTopicsResponse { throttle_time_ms, topics })
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
+        Ok(DescribeTopicsResponse {
+            throttle_time_ms,
+            topics,
+            tagged_fields,
+        })
     }
 }
 
@@ -97,6 +110,8 @@ pub struct DescribeTopicsTopic {
     is_internal: bool,
     #[get]
     partitions: Vec<DescribeTopicsPartition>,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl DescribeTopicsTopic {
@@ -106,7 +121,13 @@ impl DescribeTopicsTopic {
 
 impl DescribeTopicsTopic {
     pub fn new(name: String, error_code: i16, is_internal: bool, partitions: Vec<DescribeTopicsPartition>) -> Self {
-        DescribeTopicsTopic { name, error_code, is_internal, partitions }
+        DescribeTopicsTopic {
+            name,
+            error_code,
+            is_internal,
+            partitions,
+            tagged_fields: TaggedFields::empty(),
+        }
     }
 }
 
@@ -133,7 +154,7 @@ impl Writable for DescribeTopicsTopic {
 
         // Topic tagged_fields (flexible only)
         if flexible {
-            w.write_empty_tagged_fields();
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -149,10 +170,12 @@ impl Readable for DescribeTopicsTopic {
         for _ in 0..count {
             partitions.push(DescribeTopicsPartition::read(r, ctx)?);
         }
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
-        Ok(DescribeTopicsTopic { name, error_code, is_internal, partitions })
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
+        Ok(DescribeTopicsTopic { name, error_code, is_internal, partitions, tagged_fields })
     }
 }
 
@@ -171,6 +194,8 @@ pub struct DescribeTopicsPartition {
     adding_replicas: Vec<i32>,
     #[get]
     removing_replicas: Vec<i32>,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl DescribeTopicsPartition {
@@ -200,6 +225,7 @@ impl DescribeTopicsPartition {
             isr_nodes,
             adding_replicas,
             removing_replicas,
+            tagged_fields: TaggedFields::empty(),
         }
     }
 }
@@ -230,7 +256,7 @@ impl Writable for DescribeTopicsPartition {
             for &node in &self.removing_replicas {
                 w.write_unsigned_varint(node as u32 + 1);
             }
-            w.write_unsigned_varint(0); // tagged_fields
+            self.tagged_fields.write(w, ctx);
         } else {
             w.write_short(self.error_code);
             w.write_int(self.partition_index);
@@ -287,7 +313,7 @@ impl Readable for DescribeTopicsPartition {
             for _ in 0..removing_count {
                 removing_replicas.push(r.read_unsigned_varint()? as i32);
             }
-            r.skip_tagged_fields()?;
+            let tagged_fields = TaggedFields::read(r, ctx)?;
             Ok(DescribeTopicsPartition {
                 error_code,
                 partition_index,
@@ -297,6 +323,7 @@ impl Readable for DescribeTopicsPartition {
                 isr_nodes,
                 adding_replicas,
                 removing_replicas,
+                tagged_fields,
             })
         } else {
             Ok(DescribeTopicsPartition {
@@ -308,6 +335,7 @@ impl Readable for DescribeTopicsPartition {
                 isr_nodes,
                 adding_replicas: vec![],
                 removing_replicas: vec![],
+                tagged_fields: TaggedFields::empty(),
             })
         }
     }

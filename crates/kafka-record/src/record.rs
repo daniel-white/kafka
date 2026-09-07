@@ -165,7 +165,7 @@ impl DefaultRecord {
             });
         }
 
-        let body = readable.read_bytes_array(size_of_body as usize)?;
+        let body = readable.read_bytes_vec(size_of_body as usize)?;
 
         let mut accessor = ByteBufferAccessor::from_bytes(body);
 
@@ -188,7 +188,7 @@ impl DefaultRecord {
         let key = if key_size < 0 {
             None
         } else {
-            Some(accessor.read_bytes_array(key_size as usize)?.into_boxed_slice())
+            Some(accessor.read_bytes_vec(key_size as usize)?.into_boxed_slice())
         };
 
         // read value
@@ -196,7 +196,7 @@ impl DefaultRecord {
         let value = if value_size < 0 {
             None
         } else {
-            Some(accessor.read_bytes_array(value_size as usize)?.into_boxed_slice())
+            Some(accessor.read_bytes_vec(value_size as usize)?.into_boxed_slice())
         };
 
         // read headers
@@ -218,7 +218,7 @@ impl DefaultRecord {
             }));
         }
 
-        let total_size = size_of_varint(size_of_body) + size_of_body as usize;
+        let total_size = size_of_varint(size_of_body as u32) + size_of_body as usize;
 
         Ok(DefaultRecord::new(
             total_size as i32,
@@ -242,7 +242,7 @@ impl DefaultRecord {
             if header_key_size < 0 {
                 return Err(RecordError::InvalidHeaderKeySize(header_key_size));
             }
-            let key_bytes = readable.read_bytes_array(header_key_size as usize)?;
+            let key_bytes = readable.read_bytes_vec(header_key_size as usize)?;
             let key = String::from_utf8(key_bytes).map_err(|e| {
                 RecordError::Kafka(KafkaError::InvalidRecord {
                     message: format!("Invalid UTF-8 in header key: {}", e),
@@ -253,7 +253,7 @@ impl DefaultRecord {
             let value = if header_value_size < 0 {
                 None
             } else {
-                Some(readable.read_bytes_array(header_value_size as usize)?)
+                Some(readable.read_bytes_vec(header_value_size as usize)?)
             };
 
             headers.push(Header::new(key, value));
@@ -320,7 +320,7 @@ impl DefaultRecord {
             }
         }
 
-        size_of_varint(body_size) as i32 + body_size
+        size_of_varint(body_size as u32) as i32 + body_size
     }
 
     /// Compute the total size in bytes of a record with the given fields.
@@ -334,7 +334,7 @@ impl DefaultRecord {
         headers: &[Header],
     ) -> i32 {
         let body_size = Self::size_of_body_in_bytes(offset_delta, timestamp_delta, key, value, headers);
-        (size_of_varint(body_size) + body_size as usize) as i32
+        (size_of_varint(body_size as u32) + body_size as usize) as i32
     }
 
     fn size_of_body_in_bytes(
@@ -358,8 +358,8 @@ impl DefaultRecord {
     ) -> i32 {
         let mut size = 0i32;
         size += 1; // attributes byte
-        size += size_of_varint(offset_delta) as i32;
-        size += size_of_varlong(timestamp_delta) as i32;
+        size += size_of_varint(offset_delta as u32) as i32;
+        size += size_of_varlong(timestamp_delta as u64) as i32;
         size += Self::size_of(key_size, value_size, headers);
         size
     }
@@ -371,26 +371,26 @@ impl DefaultRecord {
         if key_size < 0 {
             size += null_varint;
         } else {
-            size += size_of_varint(key_size) as i32 + key_size;
+            size += size_of_varint(key_size as u32) as i32 + key_size;
         }
 
         if value_size < 0 {
             size += null_varint;
         } else {
-            size += size_of_varint(value_size) as i32 + value_size;
+            size += size_of_varint(value_size as u32) as i32 + value_size;
         }
 
-        size += size_of_varint(headers.len() as i32) as i32;
+        size += size_of_varint((headers.len() as i32).try_into().unwrap()) as i32;
         for header in headers {
             let key_bytes = header.key().as_bytes();
             let key_len = key_bytes.len() as i32;
-            size += size_of_varint(key_len) as i32 + key_len;
+            size += size_of_varint(key_len as u32) as i32 + key_len;
 
             let header_value_size = header.value().map(|v| v.len() as i32).unwrap_or(-1);
             if header_value_size < 0 {
                 size += null_varint;
             } else {
-                size += size_of_varint(header_value_size) as i32 + header_value_size;
+                size += size_of_varint(header_value_size as u32) as i32 + header_value_size;
             }
         }
 

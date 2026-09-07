@@ -7,20 +7,47 @@
 
 use kafka_common::Uuid;
 use kafka_protocol::api_key::ApiKey;
+use crate::handlers::{ApiHandlerResult, ApiRequest};
 use std::collections::HashMap;
 
-/// Registry of supported APIs and their version ranges.
+/// Metadata for a single API handler: the handler function.
 ///
-/// This replaces the hardcoded API version list in `handle_api_versions`.
-/// The registry is populated at startup with the APIs the broker actually
-/// supports, and `ApiVersionsResponse` is generated from it.
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/protocol/ApiKeys.java
+///   core/src/main/scala/kafka/server/KafkaApis.scala
+#[derive(Clone, Copy)]
+pub struct ApiHandlerInfo {
+    pub api_key: ApiKey,
+    pub handler: fn(ApiRequest) -> ApiHandlerResult,
+}
+
+impl std::fmt::Debug for ApiHandlerInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiHandlerInfo")
+            .field("api_key", &self.api_key)
+            .field("handler", &"<fn>")
+            .finish()
+    }
+}
+
+impl ApiHandlerInfo {
+    /// Build an entry from an API key and its handler function.
+    pub const fn new(api_key: ApiKey, handler: fn(ApiRequest) -> ApiHandlerResult) -> Self {
+        ApiHandlerInfo { api_key, handler }
+    }
+}
+
+/// Registry of supported APIs with their handlers.
+///
+/// This is the single source of truth: the same entries populate the
+/// `ApiVersionsResponse` (via `ApiKey::min_version()` / `max_version()`)
+/// and drive the `dispatch` lookup.
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/protocol/ApiKeys.java
 #[derive(Debug, Clone, Default)]
 pub struct ApiRegistry {
-    /// (api_key, min_version, max_version) for each supported API.
-    entries: Vec<(i16, i16, i16)>,
+    entries: Vec<ApiHandlerInfo>,
 }
 
 impl ApiRegistry {
@@ -30,31 +57,34 @@ impl ApiRegistry {
         }
     }
 
-    /// Register an API with its version range.
-    pub fn register(&mut self, api_key: i16, min_version: i16, max_version: i16) {
-        self.entries.push((api_key, min_version, max_version));
-    }
-
-    /// Add an API key using its enum's built-in min/max versions.
-    pub fn register_api(&mut self, key: ApiKey) {
-        self.register(key.id(), key.min_version(), key.max_version());
+    /// Register an API handler.
+    pub fn register(&mut self, info: ApiHandlerInfo) {
+        self.entries.push(info);
     }
 
     /// Get all registered entries.
-    pub fn entries(&self) -> &[(i16, i16, i16)] {
+    pub fn entries(&self) -> &[ApiHandlerInfo] {
         &self.entries
+    }
+
+    /// Find the handler for a given API key, if registered.
+    pub fn find_handler(&self, key: ApiKey) -> Option<fn(ApiRequest) -> ApiHandlerResult> {
+        self.entries.iter().find(|e| e.api_key == key).map(|e| e.handler)
     }
 
     /// Build the default set of APIs supported by this minimal broker.
     ///
     /// Only includes APIs that have actual handlers in this broker.
+    ///
+    /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
     pub fn default_broker_apis() -> Self {
         let mut registry = ApiRegistry::new();
-        registry.register(0, 3, 13); // Produce
-        registry.register(1, 0, 16); // Fetch
-        registry.register(2, 0, 5);  // ListOffsets
-        registry.register(3, 0, 13); // Metadata
-        registry.register(18, 0, 5); // ApiVersions
+        registry.register(ApiHandlerInfo::new(ApiKey::Produce, crate::handlers::handle_produce));
+        registry.register(ApiHandlerInfo::new(ApiKey::Fetch, crate::handlers::handle_fetch));
+        registry.register(ApiHandlerInfo::new(ApiKey::ListOffsets, crate::handlers::handle_list_offsets));
+        registry.register(ApiHandlerInfo::new(ApiKey::Metadata, crate::handlers::handle_metadata));
+        registry.register(ApiHandlerInfo::new(ApiKey::DescribeTopicPartitions, crate::handlers::handle_describe_topics));
+        registry.register(ApiHandlerInfo::new(ApiKey::ApiVersions, crate::handlers::handle_api_versions));
         registry
     }
 }

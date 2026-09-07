@@ -1,7 +1,7 @@
 //! End-to-end tests: start the broker, connect a raw Kafka client,
 //! send requests, and verify responses.
 
-use kafka_net::request_header::RequestHeader;
+use kafka_protocol::request_header::RequestHeader;
 use kafka_server::{KafkaServer, SocketServer};
 use kafka_server_common::ProcessStatus;
 use std::sync::Arc;
@@ -92,8 +92,8 @@ async fn test_e2e_api_versions_request() {
     eprintln!("Full response bytes: {:?}", &response[..n]);
     eprintln!("Byte at offset 8: {}", response[8]);
 
-    // The compact array count should be 6 (5 entries + 1)
-    assert_eq!(response[10], 6, "Expected COMPACT_ARRAY count of 6 (5 entries + 1), got {}", response[10]);
+    // The compact array count should be 7 (6 entries + 1)
+    assert_eq!(response[10], 7, "Expected COMPACT_ARRAY count of 7 (6 entries + 1), got {}", response[10]);
 
     server.shutdown();
 }

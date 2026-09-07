@@ -28,10 +28,9 @@ pub type BrokerResponseFrame = Vec<u8>;
 use crate::server_state::ServerState;
 use fast_stm::TVar;
 use getset::{CloneGetters, CopyGetters, Getters};
-use kafka_net::kafka_request::KafkaRequest;
-use kafka_net::response_header::ResponseHeader;
-use kafka_protocol::byte_utils;
-use kafka_protocol::errors::{Errors, ProtocolError};
+use kafka_protocol::kafka_request::KafkaRequest;
+use kafka_protocol::response_header::ResponseHeader;
+use kafka_protocol::errors::ProtocolError;
 use kafka_protocol::io::byte_buffer_accessor::ByteBufferAccessor;
 use kafka_protocol::io::reader::Readable;
 use kafka_protocol::io::writer::Writable;
@@ -93,20 +92,38 @@ impl ApiRequest {
         R::read(&mut buf, &ctx)
     }
     
-    pub fn send_msg<W: Writable>(self, msg: W) -> ApiResponse<W> {
-        ApiResponse {
+    /// Serialize a response message and wrap it in an [`ApiResponse`].
+    ///
+    /// The message body is serialized using the request's API version and
+    /// flexibility context. The response header flexibility is determined
+    /// automatically: ApiVersions always uses a non-flexible header (KIP-511),
+    /// while all other APIs follow the request's flexibility.
+    pub fn respond_with<W: Writable>(self, msg: W) -> Result<ApiResponse, ProtocolError> {
+        // ApiVersions (key 18) must always use a non-flexible response header
+        // per KIP-511, regardless of the request's flexibility.
+        let is_flexible = self.api_key != ApiKey::ApiVersions && self.is_flexible;
+        let msg_ctx = MessageContext::new(self.api_version, is_flexible);
+        let mut body = Vec::new();
+        msg.write(&mut body, &msg_ctx);
+        Ok(ApiResponse {
             correlation_id: self.correlation_id,
             api_key: self.api_key,
             api_version: self.api_version,
-            is_flexible: self.is_flexible,
-            msg,
-            state: self.state
-        }
+            is_flexible,
+            body,
+        })
     }
 }
 
+/// Structured response container: holds the serialized response body
+/// along with the metadata needed to build the wire frame.
+///
+/// Non-generic so all handlers share the same return type,
+/// enabling a uniform dispatch table.
+///
+/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
 #[derive(Debug, Getters, CopyGetters, CloneGetters)]
-pub struct ApiResponse<W: Writable> {
+pub struct ApiResponse {
     #[getset(get_copy = "pub")]
     correlation_id: i32,
     #[getset(get_copy = "pub")]
@@ -115,29 +132,29 @@ pub struct ApiResponse<W: Writable> {
     api_version: i16,
     #[getset(get_copy = "pub")]
     is_flexible: bool,
-    msg: W,
     #[getset(get_clone = "pub")]
-    state: TVar<ServerState>,
+    body: Vec<u8>,
 }
 
-impl <W: Writable> ApiResponse<W> {
-    pub fn write_frame(self) -> Result<Vec<u8>, ProtocolError> {
+impl ApiResponse {
+    /// Build the full wire frame: [4-byte size][response_header][body].
+    ///
+    /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
+    pub fn write_frame(self) -> Vec<u8> {
         let header_size = if self.is_flexible { 5 } else { 4 };
-        let msg_ctx = MessageContext::new(self.api_version, self.is_flexible);
-        let body_size = kafka_protocol::compute_size(&self.msg, &msg_ctx);
-        let response_size = (header_size + body_size) as i32;
-        let mut frame = Vec::with_capacity(4 + header_size + body_size);
+        let response_size = (header_size + self.body.len()) as i32;
+        let mut frame = Vec::with_capacity(4 + header_size + self.body.len());
         frame.extend_from_slice(&response_size.to_be_bytes());
         frame.extend_from_slice(&self.correlation_id.to_be_bytes());
         if self.is_flexible {
-            byte_utils::write_unsigned_varint(0, &mut frame)?; // tagged_fields
+            frame.push(0x00); // tagged_fields count = 0
         }
-        self.msg.write(&mut frame, &msg_ctx);
-        Ok(frame)
+        frame.extend_from_slice(&self.body);
+        frame
     }
 }
 
-pub type ApiHandlerResult<W: Writable> = Result<ApiResponse<W>, ProtocolError>;
+pub type ApiHandlerResult = Result<ApiResponse, ProtocolError>;
 
 
 /// Shared helper: build minimal error response (header only, no body).
@@ -152,63 +169,12 @@ pub fn build_empty_response(correlation_id: i32) -> Vec<u8> {
     frame
 }
 
-/// Shared helper: build response frame from raw body bytes.
+/// Convert a handler result into a wire frame, falling back to an empty
+/// response on error.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
-pub fn build_response_frame(correlation_id: i32, is_flexible: bool, body: Vec<u8>) -> Vec<u8> {
-    let header_size = if is_flexible { 5 } else { 4 };
-    let response_size = (header_size + body.len()) as i32;
-    let mut frame = Vec::with_capacity(4 + header_size + body.len());
-    frame.extend_from_slice(&response_size.to_be_bytes());
-    frame.extend_from_slice(&correlation_id.to_be_bytes());
-    if is_flexible {
-        byte_utils::write_unsigned_varint(0, &mut frame).unwrap(); // tagged_fields
-    }
-    frame.extend_from_slice(&body);
-    frame
-}
-
-/// Shared helper: build response frame from a Writable message.
-///
-/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
-pub fn build_response_frame_with<W: Writable>(
-    correlation_id: i32,
-    is_flexible: bool,
-    api_version: i16,
-    msg: W,
-) -> Vec<u8> {
-    let header_size = if is_flexible { 5 } else { 4 };
-    let msg_ctx = MessageContext::new(api_version, is_flexible);
-    let body_size = kafka_protocol::compute_size(&msg, &msg_ctx);
-    let response_size = (header_size + body_size) as i32;
-    let mut frame = Vec::with_capacity(4 + header_size + body_size);
-    frame.extend_from_slice(&response_size.to_be_bytes());
-    frame.extend_from_slice(&correlation_id.to_be_bytes());
-    if is_flexible {
-        byte_utils::write_unsigned_varint(0, &mut frame).unwrap(); // tagged_fields
-    }
-    msg.write(&mut frame, &msg_ctx);
-    frame
-}
-
-/// Build an error response frame for the given API key and protocol error.
-///
-/// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
-fn build_error_response(api_key: ApiKey, correlation_id: i32, is_flexible: bool, api_version: i16, error: ProtocolError) -> Vec<u8> {
-    let error_code = match error {
-        ProtocolError::UnsupportedVersion => Errors::UnsupportedVersion.code(),
-        ProtocolError::Io(_) => Errors::UnknownServerError.code(),
-    };
-    let header = ResponseHeader::new(correlation_id);
-    let body_size = header.size() as i32;
-    let mut frame = Vec::with_capacity(4 + header.size());
-    frame.extend_from_slice(&body_size.to_be_bytes());
-    header.write(&mut frame);
-    // Include error_code in the response body
-    let mut body = Vec::new();
-    body.extend_from_slice(&error_code.to_be_bytes());
-    frame.extend_from_slice(&body);
-    frame
+fn to_frame(r: ApiHandlerResult, correlation_id: i32) -> BrokerResponseFrame {
+    r.map(|a| a.write_frame()).unwrap_or_else(|_| build_empty_response(correlation_id))
 }
 
 /// Dispatch a parsed request to the appropriate handler.
@@ -225,36 +191,14 @@ pub fn dispatch(
 ) -> BrokerResponseFrame {
     let api_key = ApiKey::from_id(request.header.api_key);
     let correlation_id = request.header.correlation_id;
-    let is_flexible = request.header.flexible;
-    let api_version = request.header.api_version;
     let req = ApiRequest::from_request(request, state);
 
-    match api_key {
-        ApiKey::ApiVersions => {
-            match handle_api_versions(req) {
-                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
-                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
-            }
-        }
-        ApiKey::DescribeTopicPartitions => {
-            handle_describe_topics(req)
-        }
-        ApiKey::Metadata => {
-            match handle_metadata(req) {
-                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
-                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
-            }
-        }
-        ApiKey::Produce => {
-            match handle_produce(req) {
-                Ok(res) => res.write_frame().unwrap_or_else(|_| build_empty_response(correlation_id)),
-                Err(e) => build_error_response(api_key, correlation_id, is_flexible, api_version, e),
-            }
-        }
-        ApiKey::Fetch => {
-            handle_fetch(req)
-        }
-        ApiKey::ListOffsets => handle_list_offsets(req),
-        _ => build_empty_response(correlation_id),
+    let state = req.state.read_atomic();
+    let handler = state.api_registry.find_handler(api_key);
+    drop(state);
+
+    match handler {
+        Some(h) => to_frame(h(req), correlation_id),
+        None => build_empty_response(correlation_id),
     }
 }

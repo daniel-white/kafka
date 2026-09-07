@@ -52,12 +52,38 @@ pub trait Writer {
         }
     }
 
+    /// Write a NULLABLE_BYTES: int32 length prefix (-1 for null).
+    ///
+    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/Writer.java
+    fn write_nullable_bytes(&mut self, b: Option<&[u8]>) {
+        match b {
+            Some(b) => {
+                self.write_int(b.len() as i32);
+                self.write_bytes(b);
+            }
+            None => self.write_int(-1),
+        }
+    }
+
     /// Write a COMPACT_NULLABLE_STRING: unsigned varint (0 for null).
     ///
     /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/Writer.java
     fn write_compact_nullable_string(&mut self, s: Option<&str>) {
         match s {
             Some(s) => self.write_compact_string(s),
+            None => self.write_unsigned_varint(0),
+        }
+    }
+
+    /// Write a COMPACT_NULLABLE_BYTES: unsigned varint (0 for null).
+    ///
+    /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/protocol/Writer.java
+    fn write_compact_nullable_bytes(&mut self, b: Option<&[u8]>) {
+        match b {
+            Some(b) => {
+                self.write_unsigned_varint(b.len() as u32 + 1);
+                self.write_bytes(b);
+            }
             None => self.write_unsigned_varint(0),
         }
     }
@@ -145,6 +171,32 @@ pub trait Writer {
     fn write_varlong(&mut self, value: i64) {
         let zigzag = ((value << 1) ^ (value >> 63)) as u64;
         self.write_unsigned_varlong(zigzag);
+    }
+}
+
+/// Implement `Writer` for `Vec<u8>` so messages can write directly into a
+/// growable buffer (used by `ApiRequest::respond_with`).
+///
+/// MIGRATION_SOURCE: (new)
+impl Writer for Vec<u8> {
+    fn write_byte(&mut self, val: u8) {
+        self.push(val);
+    }
+
+    fn write_short(&mut self, val: i16) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+
+    fn write_int(&mut self, val: i32) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+
+    fn write_long(&mut self, val: i64) {
+        self.extend_from_slice(&val.to_be_bytes());
+    }
+
+    fn write_bytes(&mut self, arr: &[u8]) {
+        self.extend_from_slice(arr);
     }
 }
 

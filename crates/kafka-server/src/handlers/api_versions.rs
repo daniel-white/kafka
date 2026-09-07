@@ -14,14 +14,21 @@ use kafka_protocol::messages::api_versions::{ApiVersionsRequest, ApiVersionsResp
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-pub fn handle_api_versions(req: ApiRequest) -> ApiHandlerResult<ApiVersionsResponse> {
+pub fn handle_api_versions(req: ApiRequest) -> ApiHandlerResult {
     // Read the request body (empty for ApiVersions, but follows the standard pattern)
     let _ = req.read_msg::<ApiVersionsRequest>()?;
 
     let state = req.state.read_atomic();
-    let entries = state.api_registry.entries();
+    let entries: Vec<(i16, i16, i16)> = state
+        .api_registry
+        .entries()
+        .iter()
+        .map(|e| {
+            let key = e.api_key;
+            (key.id(), key.min_version(), key.max_version())
+        })
+        .collect();
 
     let res_msg = ApiVersionsResponse::from_entries(&entries);
-    let res = req.send_msg(res_msg);
-    Ok(res)
+    req.respond_with(res_msg)
 }

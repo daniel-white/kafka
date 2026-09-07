@@ -7,7 +7,6 @@ edition = "2021"
 getset = "0.1"
 kafka-common = { path = "../kafka-common" }
 kafka-server-common = { path = "../kafka-server-common" }
-kafka-net = { path = "../kafka-net" }
 kafka-protocol = { path = "../kafka-protocol" }
 kafka-record = { path = "../kafka-record" }
 kafka-storage = { path = "../kafka-storage" }

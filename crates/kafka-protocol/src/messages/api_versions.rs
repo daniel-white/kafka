@@ -14,7 +14,7 @@ use crate::io::reader::Reader;
 use crate::io::writer::{Writable, Writer};
 use crate::messages::tagged_fields::TaggedFields;
 use crate::MessageContext;
-use getset::{CopyGetters, Getters};
+use getset::Getters;
 
 /// ApiVersions request message.
 ///
@@ -35,14 +35,13 @@ impl Readable for ApiVersionsRequest {
 // ── ApiVersion entry ───────────────────────────────────────────────────────
 
 /// A single API version entry in the ApiVersions response.
-#[derive(Debug, Clone, CopyGetters, Getters)]
+#[derive(Debug, Clone, Getters)]
 pub struct ApiVersionEntry {
-    #[get_copy = "pub"]
     api_key: i16,
-    #[get_copy = "pub"]
     min_version: i16,
-    #[get_copy = "pub"]
     max_version: i16,
+    #[get]
+    tagged_fields: TaggedFields,
 }
 
 impl ApiVersionEntry {
@@ -51,8 +50,13 @@ impl ApiVersionEntry {
             api_key,
             min_version,
             max_version,
+            tagged_fields: TaggedFields::empty(),
         }
     }
+
+    pub fn api_key(&self) -> i16 { self.api_key }
+    pub fn min_version(&self) -> i16 { self.min_version }
+    pub fn max_version(&self) -> i16 { self.max_version }
 }
 
 impl Writable for ApiVersionEntry {
@@ -66,7 +70,7 @@ impl Writable for ApiVersionEntry {
         w.write_short(self.max_version);
         // tagged_fields (flexible only, v3+)
         if flexible {
-            TaggedFields::empty().write(w, ctx)
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -77,13 +81,16 @@ impl Readable for ApiVersionEntry {
         let api_key = r.read_short()?;
         let min_version = r.read_short()?;
         let max_version = r.read_short()?;
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
         Ok(ApiVersionEntry {
             api_key,
             min_version,
             max_version,
+            tagged_fields,
         })
     }
 }
@@ -98,16 +105,14 @@ impl Readable for ApiVersionEntry {
 ///
 /// MIGRATION_SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-#[derive(Debug, Clone, Default, CopyGetters, Getters)]
+#[derive(Debug, Clone, Default, Getters)]
 pub struct ApiVersionsResponse {
-    #[get_copy = "pub"]
     error_code: i16,
     #[get = "pub"]
     api_keys: Vec<ApiVersionEntry>,
-    #[get_copy = "pub"]
     throttle_time_ms: i32,
-    // Tagged fields (v3+): SupportedFeatures, FinalizedFeaturesEpoch, etc.
-    // Omitted for simplicity — brokers may not return these.
+    #[get = "pub"]
+    tagged_fields: TaggedFields,
 }
 
 impl ApiVersionsResponse {
@@ -116,8 +121,12 @@ impl ApiVersionsResponse {
             error_code,
             api_keys,
             throttle_time_ms,
+            tagged_fields: TaggedFields::empty(),
         }
     }
+
+    pub fn error_code(&self) -> i16 { self.error_code }
+    pub fn throttle_time_ms(&self) -> i32 { self.throttle_time_ms }
 
     /// Build an ApiVersionsResponse from a list of (api_key, min, max) tuples.
     pub fn from_entries(entries: &[(i16, i16, i16)]) -> Self {
@@ -148,10 +157,8 @@ impl Writable for ApiVersionsResponse {
         }
 
         // Top-level tagged_fields (v3+ only)
-        // Note: SupportedFeatures, FinalizedFeaturesEpoch, etc. are tagged fields
-        // that we don't populate.
         if flexible {
-            TaggedFields::empty().write(w, ctx);
+            self.tagged_fields.write(w, ctx);
         }
     }
 }
@@ -170,13 +177,16 @@ impl Readable for ApiVersionsResponse {
         } else {
             0
         };
-        if flexible {
-            r.skip_tagged_fields()?;
-        }
+        let tagged_fields = if flexible {
+            TaggedFields::read(r, ctx)?
+        } else {
+            TaggedFields::empty()
+        };
         Ok(ApiVersionsResponse {
             error_code,
             api_keys,
             throttle_time_ms,
+            tagged_fields,
         })
     }
 }

@@ -9,23 +9,98 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 
 use crate::errors::ProtocolError;
+use crate::io::reader::Readable;
 use crate::io::reader::Reader;
 use crate::io::writer::{Writable, Writer};
 use crate::MessageContext;
 
 /// Produce request message.
 ///
-/// This request has a body but for this broker implementation we read it
-/// using the standard pattern then parse manually.
+/// Parses the request body according to the ProduceRequest JSON spec.
+/// The broker extracts topic/partition/records info to append to the log.
+///
+/// MIGRATION_SOURCE:
+///   clients/src/main/java/org/apache/kafka/common/requests/ProduceRequest.java
 #[derive(Debug, Clone, Default)]
-pub struct ProduceRequest;
+pub struct ProduceRequest {
+    pub topics: Vec<ProduceTopic>,
+}
+
+/// A topic in a Produce request.
+#[derive(Debug, Clone, Default)]
+pub struct ProduceTopic {
+    pub name: String,
+    pub partitions: Vec<ProducePartition>,
+}
+
+/// A partition in a Produce request.
+#[derive(Debug, Clone, Default)]
+pub struct ProducePartition {
+    pub index: i32,
+    pub records: Vec<u8>,
+}
 
 impl Readable for ProduceRequest {
-    fn read<R: Reader>(
-        _r: &mut R,
-        _ctx: &MessageContext,
-    ) -> Result<Self, ProtocolError> {
-        Ok(ProduceRequest)
+    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+        let flexible = ctx.api_version() >= 9;
+
+        // TransactionalId (v3+, nullable)
+        if ctx.api_version() >= 3 {
+            if flexible {
+                let _ = r.read_compact_nullable_string()?;
+            } else {
+                let _ = r.read_nullable_string()?;
+            }
+        }
+
+        // Acks (v0+, int16)
+        let _acks = r.read_short()?;
+
+        // TimeoutMs (v0+, int32)
+        let _timeout_ms = r.read_int()?;
+
+        // TopicData (v0+)
+        let topic_count = r.read_array_count(flexible)?;
+        let mut topics = Vec::with_capacity(topic_count);
+        for _ in 0..topic_count {
+            let name = if ctx.api_version() < 13 {
+                if flexible {
+                    r.read_compact_string()?
+                } else {
+                    r.read_string_prefixed()?
+                }
+            } else {
+                let _uuid = r.read_uuid()?;
+                String::new()
+            };
+
+            let partition_count = r.read_array_count(flexible)?;
+            let mut partitions = Vec::with_capacity(partition_count);
+            for _ in 0..partition_count {
+                let index = r.read_int()?;
+
+                // Records (v0+, nullable bytes)
+                let records = if flexible {
+                    r.read_compact_nullable_bytes()?.unwrap_or_default()
+                } else {
+                    r.read_nullable_bytes()?.unwrap_or_default()
+                };
+
+                if flexible {
+                    r.skip_tagged_fields()?;
+                }
+
+                partitions.push(ProducePartition { index, records });
+            }
+
+            if flexible {
+                r.skip_tagged_fields()?;
+            }
+
+            topics.push(ProduceTopic { name, partitions });
+        }
+
+        Ok(ProduceRequest { topics })
     }
 }
 
@@ -101,7 +176,7 @@ impl Writable for PartitionProduceResponse {
                     w.write_nullable_string(err.batch_index_error_message.as_deref());
                 }
                 if flexible {
-                    w.write_empty_tagged_fields();
+                    w.write_unsigned_varint(0); // tagged_fields
                 }
             }
         }
@@ -115,7 +190,7 @@ impl Writable for PartitionProduceResponse {
         }
         // tagged_fields (flexible)
         if flexible {
-            w.write_empty_tagged_fields();
+            w.write_unsigned_varint(0); // tagged_fields
         }
     }
 }
@@ -224,7 +299,7 @@ impl Writable for TopicProduceResponse {
         }
         // tagged_fields (flexible)
         if flexible {
-            w.write_empty_tagged_fields();
+            w.write_unsigned_varint(0); // tagged_fields
         }
     }
 }
@@ -267,7 +342,7 @@ impl Writable for ProduceResponse {
         }
         // tagged_fields (flexible body)
         if flexible {
-            w.write_empty_tagged_fields();
+            w.write_unsigned_varint(0); // tagged_fields
         }
     }
 }
@@ -306,4 +381,3 @@ impl Readable for ProduceResponse {
 // Re-export for convenience
 pub use PartitionProduceResponse as Partition;
 pub use TopicProduceResponse as Topic;
-use crate::io::reader::Readable;

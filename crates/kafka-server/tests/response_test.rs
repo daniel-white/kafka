@@ -1,10 +1,9 @@
-use kafka_net::kafka_request::KafkaRequest;
-use kafka_net::request_header::RequestHeader;
+use kafka_protocol::kafka_request::KafkaRequest;
+use kafka_protocol::request_header::RequestHeader;
 use kafka_server::handlers::dispatch;
 use kafka_server::handlers::BrokerRequest;
 use kafka_server::server_state::ServerState;
 use fast_stm::TVar;
-use std::sync::Arc;
 
 fn make_request(api_key: i16, api_version: i16, correlation_id: i32) -> BrokerRequest {
     let header = RequestHeader::new(api_key, api_version, correlation_id, "");

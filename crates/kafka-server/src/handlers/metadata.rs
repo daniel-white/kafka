@@ -4,7 +4,7 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
 use crate::handlers::{ApiRequest, ApiHandlerResult};
-use kafka_protocol::metadata::{MetadataRequest, MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
+use kafka_protocol::messages::metadata::{MetadataRequest, MetadataResponse, MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic};
 
 /// Handle a Metadata request: return brokers list and topic metadata.
 ///
@@ -12,20 +12,20 @@ use kafka_protocol::metadata::{MetadataRequest, MetadataResponse, MetadataRespon
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
-pub fn handle_metadata(ctx: ApiRequest) -> ApiHandlerResult<MetadataResponse>{
+pub fn handle_metadata(ctx: ApiRequest) -> ApiHandlerResult{
     let _ = ctx.read_msg::<MetadataRequest>()?;
     
     let state = ctx.state().read_atomic();
     // Get the broker's advertised endpoint from server state
     let (broker_host, broker_port) = state.get_broker_endpoint();
-    let brokers = vec![kafka_protocol::metadata::MetadataResponseBroker::new(
+    let brokers = vec![MetadataResponseBroker::new(
         0,
         broker_host,
         broker_port,
         None,
     )];
 
-    let mut topics = Vec::new();
+    let mut topics = Vec::with_capacity(state.topics.len());
     for (name, metadata) in state.topics.iter() {
         let partitions: Vec<MetadataResponsePartition> = metadata
             .partitions
@@ -51,6 +51,5 @@ pub fn handle_metadata(ctx: ApiRequest) -> ApiHandlerResult<MetadataResponse>{
         0,  // error_code = NO_ERROR
     );
     
-    let res = ctx.send_msg(res_msg);
-    Ok(res)
+    ctx.respond_with(res_msg)
 }

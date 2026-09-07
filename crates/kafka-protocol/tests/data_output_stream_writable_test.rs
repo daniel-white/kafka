@@ -12,7 +12,7 @@ fn test_writing_sliced_byte_buffer() {
 
     // Move position forward to ensure slice is not whole buffer
     let slice = &source_buffer[2..];
-    result.write_byte_buffer(slice);
+    result.write_bytes(slice);
 
     assert_eq!(2, result.position(), "Writing to the buffer moves the position forward");
     assert_eq!(expected_array.to_vec(), result.buffer().to_vec(), "Result buffer should have expected elements");
@@ -26,7 +26,7 @@ fn test_writing_sliced_byte_buffer_with_nonzero_position() {
 
     // Move forward to ensure slice starts at offset 2
     let slice = &source_buffer[3..];
-    result.write_byte_buffer(slice);
+    result.write_bytes(slice);
 
     assert_eq!(1, result.position(), "Writing to the buffer moves the position forward");
     assert_eq!(expected_array.to_vec(), result.buffer().to_vec(), "Result buffer should have expected elements");

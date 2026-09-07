@@ -15,6 +15,21 @@ pub enum ProtocolError {
     UnsupportedVersion,
 }
 
+/// Network-layer error enum used by request/response framing.
+///
+/// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/network/NetworkReceive.java
+#[derive(Debug, thiserror::Error)]
+pub enum NetworkError {
+    #[error("Invalid receive: size = {size}, max = {max}")]
+    InvalidReceive { size: i32, max: i32 },
+    #[error("EOF while reading from channel")]
+    Eof,
+    #[error("Invalid header version: {0}")]
+    InvalidHeaderVersion(i16),
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+}
+
 /// Wire-protocol error codes, mirroring Java's `org.apache.kafka.common.protocol.Errors`.
 /// Each variant maps a numeric error code to a message and exception class.
 ///

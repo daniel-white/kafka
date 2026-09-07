@@ -22,8 +22,8 @@ fn write_and_read(response: &ApiVersionsResponse, api_version: i16, flexible: bo
 #[test]
 fn test_api_versions_response_v0_non_flexible() {
     let entries = vec![
-        ApiVersionEntry::new(3, 0, 13),  // Metadata
-        ApiVersionEntry::new(18, 0, 5),  // ApiVersions
+        ApiVersionEntry::new(3, 0, 13),
+        ApiVersionEntry::new(18, 0, 5),
     ];
     let response = ApiVersionsResponse::new(0, entries, 0);
 

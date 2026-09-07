@@ -6,7 +6,6 @@
 //!   core/src/main/scala/kafka/server/KafkaApis.scala (handleFetch)
 
 use crate::handlers::{ApiHandlerResult, ApiRequest};
-use crate::server_state::ServerState;
 use kafka_protocol::messages::fetch::{FetchPartitionResponse, FetchRequest, FetchResponse, FetchTopicResponse};
 
 /// Handle a Fetch request: extract topic/partition, retrieve stored records,

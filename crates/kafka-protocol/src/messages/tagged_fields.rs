@@ -105,14 +105,14 @@ impl RawTaggedField {
 }
 
 impl Writable for RawTaggedField {
-    fn write<W: Writer>(&self, w: &mut W, ctx: &MessageContext) {
+    fn write<W: Writer>(&self, w: &mut W, _ctx: &MessageContext) {
         w.write_unsigned_varint(self.data().len() as u32);
         w.write_bytes(self.data());
     }
 }
 
 impl Readable for RawTaggedField {
-    fn read<R: Reader>(r: &mut R, ctx: &MessageContext) -> Result<Self, ProtocolError> {
+    fn read<R: Reader>(r: &mut R, _ctx: &MessageContext) -> Result<Self, ProtocolError> {
         let tag = r.read_unsigned_varint()?;
         let size = r.read_unsigned_varint()?;
         let data = r.read_bytes_vec(size as usize)?;

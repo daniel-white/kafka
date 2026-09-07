@@ -138,6 +138,12 @@ pub struct ServerPartition {
     pub partition_index: i32,
 }
 
+impl Default for ServerState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServerState {
     pub fn new() -> Self {
         ServerState {

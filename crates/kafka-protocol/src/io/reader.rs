@@ -23,11 +23,6 @@ pub trait Reader {
     fn read_short(&mut self) -> io::Result<i16>;
     fn read_int(&mut self) -> io::Result<i32>;
     fn read_long(&mut self) -> io::Result<i64>;
-    fn read_bytes_array<const len: usize>(&mut self) -> io::Result<[u8; len]> {
-        let vec = self.read_bytes_vec(len)?;
-        let arr = vec.try_into().expect("bytes vec short");
-        Ok(arr)
-    }
     fn read_bytes_vec(&mut self, len: usize) -> io::Result<Vec<u8>>;
     fn remaining(&self) -> usize;
 
@@ -235,7 +230,7 @@ pub trait Reader {
 
     /// Read a double (IEEE 754 big-endian) from a byte stream.
     fn read_double(&mut self) -> io::Result<f64> {
-        let buf = self.read_bytes_array()?;
-        Ok(f64::from_be_bytes(buf))
+        let buf = self.read_bytes_vec(8)?;
+        Ok(f64::from_be_bytes(buf.try_into().unwrap()))
     }
 }

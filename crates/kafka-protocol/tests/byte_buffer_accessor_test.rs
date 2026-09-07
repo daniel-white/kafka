@@ -13,8 +13,8 @@ fn test_read_array() {
     accessor.write_int(12345);
     accessor.flip();
 
-    let test_array2: [u8; 3] = accessor.read_bytes_array().unwrap();
-    assert_eq!(test_array.to_vec(), test_array2.to_vec());
+    let test_array2 = accessor.read_bytes_vec(3).unwrap();
+    assert_eq!(test_array.to_vec(), test_array2);
     assert_eq!(12345, accessor.read_int().unwrap());
 
     // Error case - reading past the end

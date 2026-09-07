@@ -83,7 +83,7 @@ impl RecordSerde<ApiMessageAndVersion> for MetadataRecordSerde {
 
         // Body is the remaining bytes after the frame header.
         let body_len = std::cmp::min(remaining, readable.remaining());
-        let data = readable.read_bytes_array(body_len)?;
+        let data = readable.read_bytes_vec(body_len)?;
 
         Ok(ApiMessageAndVersion::new(data, api_key, version))
     }

@@ -3,8 +3,8 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
 
-use crate::handlers::{build_response_frame_with, RequestContext};
-use kafka_protocol::api_versions_response::ApiVersionsResponse;
+use crate::handlers::{ApiRequest, ApiHandlerResult};
+use kafka_protocol::api_versions_response::{ApiVersionsRequest, ApiVersionsResponse};
 
 /// Handle an ApiVersions request: return supported API versions from the registry.
 ///
@@ -14,14 +14,14 @@ use kafka_protocol::api_versions_response::ApiVersionsResponse;
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
-pub fn handle_api_versions(ctx: RequestContext) -> Vec<u8> {
-    // Build response from the API registry (lock-free read)
-    let state = ctx.state.read_atomic();
-    let entries = state.api_registry.entries();
-    let response = ApiVersionsResponse::from_entries(&entries);
+pub fn handle_api_versions(req: ApiRequest) -> ApiHandlerResult<ApiVersionsResponse> {
+    // Read the request body (empty for ApiVersions, but follows the standard pattern)
+    let _ = req.read_msg::<ApiVersionsRequest>()?;
 
-    // Per Kafka spec (KIP-511): ApiVersions response header is ALWAYS non-flexible,
-    // even when the request has a flexible header. Tagged fields are supported in
-    // the body only (for v3+).
-    build_response_frame_with(ctx.correlation_id, false, ctx.api_version, response)
+    let state = req.state.read_atomic();
+    let entries = state.api_registry.entries();
+
+    let res_msg = ApiVersionsResponse::from_entries(&entries);
+    let res = req.send_msg(res_msg);
+    Ok(res)
 }

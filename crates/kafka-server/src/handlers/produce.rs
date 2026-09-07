@@ -5,10 +5,10 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 //!   core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
 
-use crate::handlers::{build_response_frame_with, RequestContext};
+use crate::handlers::{build_response_frame_with, ApiHandlerResult, ApiRequest};
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
 use kafka_protocol::produce_response::{
-    PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
+    ProduceRequest, PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
 };
 
 /// Parsed Produce request details for one topic-partition.
@@ -162,15 +162,17 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
 /// to the log, and return a Produce response with the assigned base_offset.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
-pub fn handle_produce(ctx: RequestContext) -> Vec<u8> {
-    let api_version = ctx.api_version;
+pub fn handle_produce(req: ApiRequest) -> ApiHandlerResult<ProduceResponse> {
+    // Read the request body using the standard pattern
+    let _req_msg = req.read_msg::<ProduceRequest>()?;
+    let api_version = req.api_version();
     let body_is_flexible = api_version >= 9;
-    let parts = parse_produce_partitions(&ctx.body, body_is_flexible);
+    let parts = parse_produce_partitions(req.body(), body_is_flexible);
 
     let mut base_offsets = Vec::with_capacity(parts.len());
     for part in &parts {
         // Read current state atomically, clone it, apply mutations, and write back
-        let mut new_state = ctx.state.read_atomic();
+        let mut new_state = req.state.read_atomic();
         if !new_state.topics.contains_key(&part.topic_name) {
             new_state.register_topic(&part.topic_name, 1);
         }
@@ -179,21 +181,10 @@ pub fn handle_produce(ctx: RequestContext) -> Vec<u8> {
             part.partition_index,
             part.record_batch.clone(),
         );
-        ctx.state.write_atomic(new_state);
+        req.state().write_atomic(new_state);
         base_offsets.push(base_offset);
     }
 
-    build_produce_response(ctx, &parts, &base_offsets)
-}
-
-/// Build a Produce response using the trait-based ProduceResponse struct.
-///
-/// MIGRATION_SOURCE: clients/.../ProduceResponse.java
-fn build_produce_response(
-    ctx: RequestContext,
-    parts: &[ProduceTopicPartition],
-    base_offsets: &[i64],
-) -> Vec<u8> {
     let mut topics = Vec::new();
 
     for (i, part) in parts.iter().enumerate() {
@@ -216,6 +207,19 @@ fn build_produce_response(
         ));
     }
 
-    let response = ProduceResponse::new(topics, 0, 0);
-    build_response_frame_with(ctx.correlation_id, ctx.is_flexible, ctx.api_version, response)
+    let res_msg = ProduceResponse::new(topics, 0, 0);
+    let res = req.send_msg(res_msg);
+    Ok(res)
+}
+
+/// Build a Produce response using the trait-based ProduceResponse struct.
+///
+/// MIGRATION_SOURCE: clients/.../ProduceResponse.java
+fn build_produce_response(
+    ctx: ApiRequest,
+    parts: &[ProduceTopicPartition],
+    base_offsets: &[i64],
+) -> Vec<u8> {
+
+    build_response_frame_with(ctx.correlation_id(), ctx.is_flexible(), ctx.api_version(), response)
 }

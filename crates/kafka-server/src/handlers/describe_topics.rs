@@ -3,8 +3,8 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
 
-use crate::handlers::{build_response_frame, RequestContext};
-use kafka_protocol::byte_utils;
+use crate::handlers::{build_response_frame, ApiRequest};
+use kafka_protocol::request_types::DescribeTopicsRequest;
 
 /// Handle a DescribeTopics/DescribeTopicPartitions request: return metadata for all known topics.
 ///
@@ -15,10 +15,12 @@ use kafka_protocol::byte_utils;
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
-pub fn handle_describe_topics(ctx: &RequestContext) -> Vec<u8> {
-    let state = ctx.state.read_atomic();
+pub fn handle_describe_topics(ctx: ApiRequest) -> Vec<u8> {
+    // Read the request body (empty for this broker implementation)
+    let _req_msg = ctx.read_msg::<DescribeTopicsRequest>();
+    let state = ctx.state().read_atomic();
     let mut body = Vec::new();
-    let body_is_flexible = ctx.api_version >= 3;
+    let body_is_flexible = ctx.api_version() >= 3;
 
     if body_is_flexible {
         body.extend_from_slice(&0i32.to_be_bytes()); // throttle_time_ms = 0
@@ -97,5 +99,5 @@ pub fn handle_describe_topics(ctx: &RequestContext) -> Vec<u8> {
         body.extend_from_slice(&0i16.to_be_bytes()); // top-level error_code = 0
     }
 
-    build_response_frame(ctx.correlation_id, ctx.is_flexible, body)
+    build_response_frame(ctx.correlation_id(), ctx.is_flexible(), body)
 }

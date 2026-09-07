@@ -1,10 +1,11 @@
-//! ApiVersions response messages, implementing Writable and Readable traits.
+//! ApiVersions request and response messages, implementing Writable and Readable traits.
 //!
 //! Wire format from ApiVersionsResponse.json:
 //!   v0-v2 (non-flexible): ErrorCode, ApiKeys[] (ApiKey+MinVer+MaxVer), [ThrottleTimeMs(v1+)]
 //!   v3+ (flexible): same fields but with compact encoding + tagged_fields
 //!
 //! MIGRATION_SOURCE:
+//!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsRequest.java
 //!   clients/src/main/java/org/apache/kafka/common/requests/ApiVersionsResponse.java
 
 use crate::reader::Reader;
@@ -12,6 +13,22 @@ use crate::writer::Writer;
 use crate::errors::ProtocolError;
 use crate::{MessageContext, Readable, Writable};
 use getset::{CopyGetters, Getters};
+
+/// ApiVersions request message.
+///
+/// This request has no body (just the header), but we provide a type
+/// for consistency with the protocol API.
+#[derive(Debug, Clone, Default)]
+pub struct ApiVersionsRequest;
+
+impl Readable for ApiVersionsRequest {
+    fn read<R: Reader>(
+        _r: &mut R,
+        _ctx: &MessageContext,
+    ) -> Result<Self, ProtocolError> {
+        Ok(ApiVersionsRequest)
+    }
+}
 
 // ── ApiVersion entry ───────────────────────────────────────────────────────
 

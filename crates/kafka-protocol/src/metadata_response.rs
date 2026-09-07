@@ -1,4 +1,4 @@
-//! Metadata response messages, implementing Writable and Readable traits.
+//! Metadata request and response messages, implementing Writable and Readable traits.
 //!
 //! Wire format from MetadataResponse.json:
 //!   v0-v8 (non-flexible): ThrottleTimeMs(v3+), Brokers[], ClusterId(v2+),
@@ -12,12 +12,29 @@
 //! `MessageContext` that carries version + flexibility info (similar to how
 //! `Hash` passes itself through a `Hasher` context).
 //!
+//! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/MetadataRequest.java
 //! MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
 use crate::reader::Reader;
 use crate::writer::Writer;
 use crate::errors::ProtocolError;
 use crate::{MessageContext, Readable, Writable};
+
+/// Metadata request message.
+///
+/// For v0-v6 this request has no body (just the header).
+/// For v7+ there's a body, but we handle it separately.
+#[derive(Debug, Clone, Default)]
+pub struct MetadataRequest;
+
+impl Readable for MetadataRequest {
+    fn read<R: Reader>(
+        _r: &mut R,
+        _ctx: &MessageContext,
+    ) -> Result<Self, ProtocolError> {
+        Ok(MetadataRequest)
+    }
+}
 use getset::{CopyGetters, Getters};
 
 // ── Broker ───────────────────────────────────────────────────────────────

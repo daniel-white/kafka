@@ -11,11 +11,10 @@ use std::time::Duration;
 use fast_stm::TVar;
 
 pub mod handlers;
-pub mod request_handler;
 pub mod server_state;
 pub mod socket_server;
 
-pub use handlers::{build_empty_response, build_response_frame, dispatch};
+pub use handlers::{build_empty_response, dispatch};
 pub use server_state::{ServerPartition, ServerState, TopicMetadata};
 pub use socket_server::{KafkaConnection, SocketServer};
 

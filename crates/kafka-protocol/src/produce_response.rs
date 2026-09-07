@@ -1,16 +1,33 @@
-//! Produce response messages, implementing Writable trait.
+//! Produce request and response messages, implementing Writable trait.
 //!
 //! Wire format from ProduceResponse.json:
 //!   v3-v8 (non-flexible): Responses[], [ThrottleTimeMs(v6+)], [ErrorCode(v13+)]
 //!   v9+ (flexible): same fields but with compact encoding + tagged_fields
 //!
 //! MIGRATION_SOURCE:
+//!   clients/src/main/java/org/apache/kafka/common/requests/ProduceRequest.java
 //!   clients/src/main/java/org/apache/kafka/common/requests/ProduceResponse.java
 
 use crate::reader::Reader;
 use crate::writer::Writer;
 use crate::errors::ProtocolError;
 use crate::{MessageContext, Readable, Writable};
+
+/// Produce request message.
+///
+/// This request has a body but for this broker implementation we read it
+/// using the standard pattern then parse manually.
+#[derive(Debug, Clone, Default)]
+pub struct ProduceRequest;
+
+impl Readable for ProduceRequest {
+    fn read<R: Reader>(
+        _r: &mut R,
+        _ctx: &MessageContext,
+    ) -> Result<Self, ProtocolError> {
+        Ok(ProduceRequest)
+    }
+}
 
 // ── Partition Produce Response ─────────────────────────────────────────────
 

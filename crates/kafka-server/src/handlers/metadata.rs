@@ -3,8 +3,8 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
-use crate::handlers::{build_response_frame_with, RequestContext};
-use kafka_protocol::metadata_response::{MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
+use crate::handlers::{ApiRequest, ApiHandlerResult};
+use kafka_protocol::metadata_response::{MetadataRequest, MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
 
 /// Handle a Metadata request: return brokers list and topic metadata.
 ///
@@ -12,10 +12,10 @@ use kafka_protocol::metadata_response::{MetadataResponse, MetadataResponsePartit
 ///
 /// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
-pub fn handle_metadata(ctx: RequestContext) -> Vec<u8> {
-    // Lock-free read access to state via TVar::read_atomic()
-    let state = ctx.state.read_atomic();
-
+pub fn handle_metadata(ctx: ApiRequest) -> ApiHandlerResult<MetadataResponse>{
+    let _ = ctx.read_msg::<MetadataRequest>()?;
+    
+    let state = ctx.state().read_atomic();
     // Get the broker's advertised endpoint from server state
     let (broker_host, broker_port) = state.get_broker_endpoint();
     let brokers = vec![kafka_protocol::metadata_response::MetadataResponseBroker::new(
@@ -41,7 +41,7 @@ pub fn handle_metadata(ctx: RequestContext) -> Vec<u8> {
         ));
     }
 
-    let response = MetadataResponse::new(
+    let res_msg = MetadataResponse::new(
         0,  // throttle_time_ms
         brokers,
         None, // cluster_id
@@ -50,6 +50,7 @@ pub fn handle_metadata(ctx: RequestContext) -> Vec<u8> {
         0,  // cluster_authorized_operations
         0,  // error_code = NO_ERROR
     );
-
-    build_response_frame_with(ctx.correlation_id, ctx.is_flexible, ctx.api_version, response)
+    
+    let res = ctx.send_msg(res_msg);
+    Ok(res)
 }

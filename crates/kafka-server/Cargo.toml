@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+getset = "0.1"
 kafka-common = { path = "../kafka-common" }
 kafka-server-common = { path = "../kafka-server-common" }
 kafka-net = { path = "../kafka-net" }
@@ -15,7 +16,7 @@ thiserror = "2"
 fast-stm = "0.7"
 
 [dev-dependencies]
-rdkafka = { version = "0.37", features = ["tokio"] }
+rdkafka = { version = "0.39", features = ["tokio"] }
 
 [lints.rust]
 unsafe_code = "deny"

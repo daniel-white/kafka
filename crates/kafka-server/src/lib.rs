@@ -6,8 +6,9 @@
 
 use kafka_server_common::ProcessStatus;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
+use fast_stm::TVar;
 
 pub mod handlers;
 pub mod request_handler;
@@ -20,15 +21,14 @@ pub use socket_server::{KafkaConnection, SocketServer};
 
 /// Server lifecycle state, managed atomically.
 ///
-/// Mirrors Scala's broker state tracking.
-///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
 #[derive(Debug, Clone)]
 pub struct KafkaServer {
     /// Process lifecycle status.
     status: Arc<AtomicU8>,
-    /// Broker-level state (topics, partitions).
-    state: Arc<RwLock<ServerState>>,
+    /// Broker-level state (topics, partitions) — accessed via TVar for
+    /// lock-free reads. Writers use write_atomic() for atomic replacement.
+    state: TVar<ServerState>,
 }
 
 impl KafkaServer {
@@ -38,7 +38,7 @@ impl KafkaServer {
     pub fn new() -> Self {
         KafkaServer {
             status: Arc::new(AtomicU8::new(ProcessStatus::Shutdown as u8)),
-            state: Arc::new(RwLock::new(ServerState::new())),
+            state: TVar::new(ServerState::new()),
         }
     }
 
@@ -83,11 +83,14 @@ impl KafkaServer {
         self.status() == ProcessStatus::Started
     }
 
-    /// Get a reference to the server's broker-level state.
+    /// Get a clone of the server's state handle for lock-free access.
+    ///
+    /// Readers use .read_atomic() to atomically read the current state.
+    /// Writers use .write_atomic(new_state) to atomically replace state.
     ///
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaBroker.scala
-    pub fn state(&self) -> &Arc<RwLock<ServerState>> {
-        &self.state
+    pub fn state(&self) -> TVar<ServerState> {
+        self.state.clone()
     }
 }
 

@@ -20,35 +20,44 @@ pub use list_offsets::handle_list_offsets;
 pub use metadata::handle_metadata;
 pub use produce::handle_produce;
 
+/// Type alias for a parsed Kafka protocol request received by the broker.
+/// Renamed from KafkaRequest for clarity at the server layer.
+pub type BrokerRequest = KafkaRequest;
+
 use crate::server_state::ServerState;
+use fast_stm::TVar;
 use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::response_header::ResponseHeader;
 use kafka_protocol::byte_utils;
 use kafka_protocol::ApiKey;
-use std::sync::RwLock;
 
 /// Common context passed to all request handlers.
 ///
-/// This bundles together the per-request information (correlation_id, api_version,
-/// flexibility flag) and the broker's server state, so handlers don't need
-/// long parameter lists.
+/// Uses `TVar` for lock-free transactional state access. Read handlers call
+/// `state.read_atomic()` for atomic, lock-free reads. Write handlers use
+/// `state.write_atomic(new_state)` for atomic replacement.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
 #[derive(Debug)]
-pub struct RequestContext<'a> {
+pub struct RequestContext {
     pub correlation_id: i32,
     pub api_version: i16,
     pub is_flexible: bool,
-    pub state: &'a RwLock<ServerState>,
+    pub body: Vec<u8>,
+    pub state: TVar<ServerState>,
 }
 
-impl<'a> RequestContext<'a> {
-    /// Build a RequestContext from a parsed KafkaRequest.
-    pub fn from_request(request: &KafkaRequest, state: &'a RwLock<ServerState>) -> Self {
+impl RequestContext {
+    /// Build a RequestContext from a parsed BrokerRequest.
+    pub fn from_request(
+        request: &BrokerRequest,
+        state: TVar<ServerState>,
+    ) -> Self {
         RequestContext {
             correlation_id: request.header.correlation_id,
             api_version: request.header.api_version,
             is_flexible: request.header.flexible,
+            body: request.body.to_vec(),
             state,
         }
     }
@@ -74,28 +83,26 @@ pub fn build_response_frame(correlation_id: i32, is_flexible: bool, body: Vec<u8
     frame
 }
 
-/// Generic `build_response_frame` that takes a `Writable` by value and a
-/// `RequestContext` by value, writing the response with pre-sized buffer
-/// (single allocation, no intermediate Vec for body).
-///
-/// The `override_flexible` parameter allows handlers to override the request's
-/// flexibility flag (e.g., ApiVersions always responds with non-flexible header
+/// Generic `build_response_frame` that takes a `Writable` by value and writes
+/// it directly, pre-sizing the frame buffer (single allocation, no intermediate
+/// Vec for body). The `override_flexible` parameter allows handlers to control
+/// the response header format (e.g., ApiVersions always uses non-flexible
 /// per KIP-511, regardless of the request's flexibility).
 ///
 /// MIGRATION_SOURCE: clients/src/main/java/org/apache/kafka/common/requests/AbstractResponse.java
 pub fn build_response_frame_with<W: kafka_protocol::Writable>(
-    ctx: RequestContext,
+    correlation_id: i32,
+    is_flexible: bool,
+    api_version: i16,
     msg: W,
-    override_flexible: Option<bool>,
 ) -> Vec<u8> {
-    let is_flexible = override_flexible.unwrap_or(ctx.is_flexible);
     let header_size = if is_flexible { 5 } else { 4 };
-    let msg_ctx = kafka_protocol::MessageContext::new(ctx.api_version, is_flexible);
+    let msg_ctx = kafka_protocol::MessageContext::new(api_version, is_flexible);
     let body_size = kafka_protocol::message_body_size(&msg, &msg_ctx);
     let response_size = (header_size + body_size) as i32;
     let mut frame = Vec::with_capacity(4 + header_size + body_size);
     frame.extend_from_slice(&response_size.to_be_bytes());
-    frame.extend_from_slice(&ctx.correlation_id.to_be_bytes());
+    frame.extend_from_slice(&correlation_id.to_be_bytes());
     if is_flexible {
         byte_utils::write_unsigned_varint(0, &mut frame).unwrap(); // tagged_fields
     }
@@ -124,11 +131,11 @@ pub fn build_empty_response(correlation_id: i32) -> Vec<u8> {
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala
 pub fn dispatch(
-    request: &KafkaRequest,
-    state: &RwLock<ServerState>,
+    request: BrokerRequest,
+    state: TVar<ServerState>,
 ) -> Vec<u8> {
     let api_key = ApiKey::from_id(request.header.api_key);
-    let ctx = RequestContext::from_request(request, state);
+    let ctx = RequestContext::from_request(&request, state);
 
     eprintln!(
         "dispatch: api_key={:?} (id={}), api_version={}, is_flexible={}, client_id={:?}, body_len={}",
@@ -138,24 +145,19 @@ pub fn dispatch(
 
     match api_key {
         ApiKey::ApiVersions => {
-            let state = ctx.state.read().unwrap();
-            handle_api_versions(ctx, &state)
+            handle_api_versions(ctx)
         }
         ApiKey::DescribeTopicPartitions => {
-            let state = ctx.state.read().unwrap();
-            handle_describe_topics(ctx.correlation_id, &state, ctx.api_version, ctx.is_flexible)
+            handle_describe_topics(&ctx)
         }
         ApiKey::Metadata => {
-            let state = ctx.state.read().unwrap();
-            handle_metadata(ctx, &state)
+            handle_metadata(ctx)
         }
         ApiKey::Produce => {
-            let mut state = ctx.state.write().unwrap();
-            handle_produce(request, &mut state, ctx)
+            handle_produce(ctx)
         }
         ApiKey::Fetch => {
-            let state = ctx.state.read().unwrap();
-            handle_fetch(request, &state)
+            handle_fetch(ctx)
         }
         ApiKey::ListOffsets => handle_list_offsets(ctx.correlation_id, ctx.api_version, ctx.is_flexible),
         _ => build_empty_response(ctx.correlation_id),

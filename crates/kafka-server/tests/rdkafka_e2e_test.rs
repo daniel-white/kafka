@@ -28,8 +28,9 @@ async fn start_test_broker(
 
     // Pre-register the topic so librdkafka can discover it
     {
-        let mut state = server.state().write().unwrap();
-        state.register_topic(topic, 1);
+        let mut new_state = server.state().read_atomic();
+        new_state.register_topic(topic, 1);
+        server.state().write_atomic(new_state);
     }
 
     let socket_server = SocketServer::new(server.clone());
@@ -39,8 +40,9 @@ async fn start_test_broker(
     // Set the broker's advertised endpoint so Metadata responses use the
     // correct host:port that librdkafka can actually connect to.
     {
-        let mut state = server.state().write().unwrap();
-        state.set_broker_endpoint(addr.ip().to_string(), addr.port() as i32);
+        let mut new_state = server.state().read_atomic();
+        new_state.set_broker_endpoint(addr.ip().to_string(), addr.port() as i32);
+        server.state().write_atomic(new_state);
     }
 
     let handle = tokio::spawn(async move {

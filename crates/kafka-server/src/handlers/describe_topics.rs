@@ -3,8 +3,7 @@
 //! MIGRATION_SOURCE:
 //!   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
 
-use crate::handlers::build_response_frame;
-use crate::server_state::ServerState;
+use crate::handlers::{build_response_frame, RequestContext};
 use kafka_protocol::byte_utils;
 
 /// Handle a DescribeTopics/DescribeTopicPartitions request: return metadata for all known topics.
@@ -14,11 +13,12 @@ use kafka_protocol::byte_utils;
 ///
 /// Response header format is determined by `is_flexible` (whether the request used a flexible header).
 ///
-/// MIGRATION_SOURCE:
+/// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/DescribeTopicsResponse.java
-pub fn handle_describe_topics(correlation_id: i32, state: &ServerState, api_version: i16, is_flexible: bool) -> Vec<u8> {
+pub fn handle_describe_topics(ctx: &RequestContext) -> Vec<u8> {
+    let state = ctx.state.read_atomic();
     let mut body = Vec::new();
-    let body_is_flexible = api_version >= 3;
+    let body_is_flexible = ctx.api_version >= 3;
 
     if body_is_flexible {
         body.extend_from_slice(&0i32.to_be_bytes()); // throttle_time_ms = 0
@@ -97,5 +97,5 @@ pub fn handle_describe_topics(correlation_id: i32, state: &ServerState, api_vers
         body.extend_from_slice(&0i16.to_be_bytes()); // top-level error_code = 0
     }
 
-    build_response_frame(correlation_id, is_flexible, body)
+    build_response_frame(ctx.correlation_id, ctx.is_flexible, body)
 }

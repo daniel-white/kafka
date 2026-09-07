@@ -4,16 +4,18 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
 
 use crate::handlers::{build_response_frame_with, RequestContext};
-use crate::server_state::ServerState;
 use kafka_protocol::metadata_response::{MetadataResponse, MetadataResponsePartition, MetadataResponseTopic};
 
 /// Handle a Metadata request: return brokers list and topic metadata.
 ///
 /// Uses the trait-based `MetadataResponse` message for version-aware serialization.
 ///
-/// MIGRATION_SOURCE:
+/// MIGRATION SOURCE:
 ///   clients/src/main/java/org/apache/kafka/common/requests/MetadataResponse.java
-pub fn handle_metadata(ctx: RequestContext, state: &ServerState) -> Vec<u8> {
+pub fn handle_metadata(ctx: RequestContext) -> Vec<u8> {
+    // Lock-free read access to state via TVar::read_atomic()
+    let state = ctx.state.read_atomic();
+
     // Get the broker's advertised endpoint from server state
     let (broker_host, broker_port) = state.get_broker_endpoint();
     let brokers = vec![kafka_protocol::metadata_response::MetadataResponseBroker::new(
@@ -49,5 +51,5 @@ pub fn handle_metadata(ctx: RequestContext, state: &ServerState) -> Vec<u8> {
         0,  // error_code = NO_ERROR
     );
 
-    build_response_frame_with(ctx, response, None)
+    build_response_frame_with(ctx.correlation_id, ctx.is_flexible, ctx.api_version, response)
 }

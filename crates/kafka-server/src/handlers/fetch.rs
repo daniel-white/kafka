@@ -5,9 +5,8 @@
 //!   clients/src/main/java/org/apache/kafka/common/requests/FetchResponse.java
 //!   core/src/main/scala/kafka/server/KafkaApis.scala (handleFetch)
 
-use crate::handlers::build_response_frame;
+use crate::handlers::{build_response_frame, RequestContext};
 use crate::server_state::ServerState;
-use kafka_net::kafka_request::KafkaRequest;
 use kafka_protocol::byte_utils;
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
 
@@ -159,18 +158,19 @@ fn parse_fetch_partitions(body: &[u8], is_flexible: bool) -> Vec<FetchTopicParti
 /// and return a Fetch response.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala (handleFetch)
-pub fn handle_fetch(request: &KafkaRequest, state: &ServerState) -> Vec<u8> {
-    let is_flexible = request.header.flexible;
-    let api_version = request.header.api_version;
+pub fn handle_fetch(ctx: RequestContext) -> Vec<u8> {
+    let is_flexible = ctx.is_flexible;
+    let api_version = ctx.api_version;
     let body_is_flexible = api_version >= 12;
-    let parts = parse_fetch_partitions(&request.body, body_is_flexible);
+    let parts = parse_fetch_partitions(&ctx.body, body_is_flexible);
 
+    let state = ctx.state.read_atomic();
     build_fetch_response(
-        request.header.correlation_id,
+        ctx.correlation_id,
         is_flexible,
         api_version,
         &parts,
-        state,
+        &state,
     )
 }
 

@@ -62,7 +62,7 @@ impl ApiRegistry {
 /// Broker-level state: topic metadata, partition state, and log segments.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaServer.scala
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ServerState {
     /// All known topics, keyed by topic name.
     pub topics: HashMap<String, TopicMetadata>,

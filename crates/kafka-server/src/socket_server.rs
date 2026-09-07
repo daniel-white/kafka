@@ -13,7 +13,8 @@ use kafka_net::kafka_request::KafkaRequest;
 use kafka_net::network_receive::NetworkReceive;
 use kafka_net::request_header::RequestHeader;
 use kafka_server_common::ProcessStatus;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use fast_stm::TVar;
 
 /// A single accepted connection.
 ///
@@ -103,14 +104,14 @@ impl SocketServer {
     ///
     /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/SocketServer.scala
     pub async fn accept_loop(&self, listener: tokio::net::TcpListener) {
-        let state = self.server.state().clone();
+        let state = self.server.state();
         loop {
             match listener.accept().await {
                 Ok((mut socket, peer_addr)) => {
                     println!("Accepted connection from {}", peer_addr);
                     let state = state.clone();
                     tokio::spawn(async move {
-                        handle_connection(&mut socket, peer_addr, &state).await;
+                        handle_connection(&mut socket, peer_addr, state).await;
                     });
                 }
                 Err(e) => eprintln!("Accept error: {}", e),
@@ -126,7 +127,7 @@ impl SocketServer {
 pub async fn handle_connection(
     socket: &mut tokio::net::TcpStream,
     peer_addr: std::net::SocketAddr,
-    state: &Arc<RwLock<ServerState>>,
+    state: TVar<ServerState>,
 ) {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -168,7 +169,7 @@ pub async fn handle_connection(
                                request.header.flexible,
                                request.header.client_id
                            );
-                           let response = dispatch(&request, state);
+                            let response = dispatch(request, state.clone());
                            let _ = socket.write_all(&response).await;
                      }
                      conn = KafkaConnection::new();

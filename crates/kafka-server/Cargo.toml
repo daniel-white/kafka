@@ -12,6 +12,7 @@ kafka-record = { path = "../kafka-record" }
 kafka-storage = { path = "../kafka-storage" }
 tokio = { version = "1.0", features = ["full"] }
 thiserror = "2"
+fast-stm = "0.7"
 
 [dev-dependencies]
 rdkafka = { version = "0.37", features = ["tokio"] }

@@ -6,8 +6,6 @@
 //!   core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
 
 use crate::handlers::{build_response_frame_with, RequestContext};
-use crate::server_state::ServerState;
-use kafka_net::kafka_request::KafkaRequest;
 use kafka_protocol::byte_utils::read_unsigned_varint_from_slice;
 use kafka_protocol::produce_response::{
     PartitionProduceResponse, ProduceResponse, TopicProduceResponse,
@@ -164,21 +162,24 @@ fn parse_produce_partitions(body: &[u8], is_flexible: bool) -> Vec<ProduceTopicP
 /// to the log, and return a Produce response with the assigned base_offset.
 ///
 /// MIGRATION_SOURCE: core/src/main/scala/kafka/server/KafkaApis.scala (handleProduce)
-pub fn handle_produce(request: &KafkaRequest, state: &mut ServerState, ctx: RequestContext) -> Vec<u8> {
+pub fn handle_produce(ctx: RequestContext) -> Vec<u8> {
     let api_version = ctx.api_version;
     let body_is_flexible = api_version >= 9;
-    let parts = parse_produce_partitions(&request.body, body_is_flexible);
+    let parts = parse_produce_partitions(&ctx.body, body_is_flexible);
 
-    let mut base_offsets: Vec<i64> = Vec::new();
+    let mut base_offsets = Vec::with_capacity(parts.len());
     for part in &parts {
-        if !state.topics.contains_key(&part.topic_name) {
-            state.register_topic(&part.topic_name, 1);
+        // Read current state atomically, clone it, apply mutations, and write back
+        let mut new_state = ctx.state.read_atomic();
+        if !new_state.topics.contains_key(&part.topic_name) {
+            new_state.register_topic(&part.topic_name, 1);
         }
-        let base_offset = state.append_records(
+        let base_offset = new_state.append_records(
             &part.topic_name,
             part.partition_index,
             part.record_batch.clone(),
         );
+        ctx.state.write_atomic(new_state);
         base_offsets.push(base_offset);
     }
 
@@ -216,5 +217,5 @@ fn build_produce_response(
     }
 
     let response = ProduceResponse::new(topics, 0, 0);
-    build_response_frame_with(ctx, response, None)
+    build_response_frame_with(ctx.correlation_id, ctx.is_flexible, ctx.api_version, response)
 }
